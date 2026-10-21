@@ -28,7 +28,7 @@ struct MenuLabel: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(nsImage: store.icon).renderingMode(.template)
+            Image(nsImage: store.icon).renderingMode(.original)
             let title = store.menuTitle
             if !title.isEmpty {
                 Text(title).monospacedDigit()

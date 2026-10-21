@@ -21,13 +21,13 @@
 - **2% 전에 미리 멈춤:** 에이전트(Claude Code, Codex 등)가 일하는 도중 5시간 한도나 주간 한도의 남은 양이 **2% 아래로 떨어지면**, 다음 도구 호출 직전에 그 자리에서 멈춰요.
 - **대기 중 토큰 0:** 멈춘 동안에는 모델을 한 번도 부르지 않아요. hook 프로세스가 리셋 시각까지 `sleep`할 뿐이에요.
 - **리셋되면 자동 재개:** 한도가 다시 차면 그대로 이어서 작업해요.
-- **메뉴바 표시:** Mac 메뉴바의 수액팩 아이콘에서 남은 양, 대기 중인지, 언제 재개하는지 보여줘요.
+- **메뉴바 표시:** Mac 메뉴바의 주사기 아이콘에서 남은 양, 대기 중인지, 언제 재개하는지 보여줘요. 작동 중엔 **파란색**, 대기 중엔 **회색**이에요.
 
 이름은 병원의 **모르핀 PCA 펌프**에서 왔어요. 버튼을 누르면 한 번 투여되고, 그다음엔 **잠금 시간(lockout)** 동안 아무리 눌러도 안 나와요. 쿨타임이 끝나면 다시 투여돼요.
 
 <p align="center"><img src="app/Resources/menubar-preview.png" width="420" alt="메뉴바 아이콘 상태"></p>
 
-수액 높이 = 남은 사용량 · 숫자 = 가장 많이 쓴 한도의 사용률 · 자물쇠 = 대기 중(리셋까지 남은 시간)
+주사기 안 약 양 = 남은 사용량 · 숫자 = 가장 많이 쓴 한도의 사용률 · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
 
 ### 지원 범위
 
@@ -95,7 +95,7 @@ morphine uninstall                        # 모든 훅 제거 (백업 남김)
 
 ## English
 
-**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **2%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and sleeps until the reset, so **no model calls happen while it waits**. Then the hook returns and the agent continues. A macOS menu bar app shows an IV-drip icon whose fluid level is the remaining usage. A padlock and countdown replace the fluid while an agent is locked out, like the lockout interval on a morphine PCA pump.
+**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **2%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and sleeps until the reset, so **no model calls happen while it waits**. Then the hook returns and the agent continues. A macOS menu bar app shows a syringe whose dose is the remaining usage: blue while agents run, gray with a pause mark and a countdown while one is locked out, like the lockout interval on a morphine PCA pump.
 
 | Agent | Usage source | Pause mechanism | Pauses ahead of the limit |
 |---|---|---|---|

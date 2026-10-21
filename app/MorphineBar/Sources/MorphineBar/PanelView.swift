@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct PanelView: View {
@@ -23,7 +24,7 @@ struct PanelView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            Image(nsImage: store.icon).renderingMode(.template)
+            Image(nsImage: store.icon).renderingMode(.original)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Morphine").font(.headline)
                 Text(statusLine).font(.caption).foregroundStyle(.secondary)

@@ -61,7 +61,7 @@ final class Store: ObservableObject {
     }
 
     var icon: NSImage {
-        IVBagIcon.image(remaining: worst.map { (100 - $0.used) / 100 }, locked: isLocked)
+        SyringeIcon.image(remaining: worst.map { (100 - $0.used) / 100 }, locked: isLocked)
     }
 
     // MARK: - Actions
