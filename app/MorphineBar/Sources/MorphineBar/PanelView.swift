@@ -134,11 +134,19 @@ struct PanelView: View {
     /// Same lettered badge the menu bar uses (C Claude · O Codex · G Gemini · X Grok · A Antigravity).
     private func badge(_ id: String) -> some View {
         let locked = store.waiting.contains { $0.provider == id }
-        return Text(SyringeIcon.letter(for: id))
-            .font(.system(size: 9, weight: .heavy))
-            .foregroundStyle(.white)
-            .frame(width: 15, height: 15)
-            .background(Circle().fill(locked ? Color.gray : Color.blue))
+        return Group {
+            if let art = SyringeIcon.customIcon(for: id) {
+                Image(nsImage: art).resizable().renderingMode(.template).interpolation(.high)
+                    .foregroundStyle(locked ? Color.gray : Color.blue)
+                    .frame(width: 15, height: 15)
+            } else {
+                Text(SyringeIcon.letter(for: id))
+                    .font(.system(size: 9, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .frame(width: 15, height: 15)
+                    .background(Circle().fill(locked ? Color.gray : Color.blue))
+            }
+        }
     }
 
     // MARK: controls

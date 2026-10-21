@@ -68,8 +68,26 @@ enum SyringeIcon {
         [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold), .foregroundColor: color]
     }
 
+    /// Side of the box a user-supplied logo fills (nearly the full bar height).
+    private static let logoSide: CGFloat = 14
+
+    private static func badgeWidth(_ item: Item) -> CGFloat {
+        customIcon(for: item.provider) != nil ? logoSide : badgeRadius * 2
+    }
+
+    /// Logo silhouette recoloured to `color` (blue running / gray waiting), so it
+    /// reads on light and dark menu bars alike.
+    private static func tinted(_ art: NSImage, _ color: NSColor, side: CGFloat) -> NSImage {
+        NSImage(size: NSSize(width: side, height: side), flipped: false) { r in
+            art.draw(in: r, from: .zero, operation: .sourceOver, fraction: 1)
+            color.set()
+            r.fill(using: .sourceAtop)
+            return true
+        }
+    }
+
     private static func itemWidth(_ item: Item) -> CGFloat {
-        let art: CGFloat = 21.8 * scale + badgeRadius * 2 - 0.6
+        let art: CGFloat = 21.8 * scale - 0.6 + badgeWidth(item)
         guard !item.text.isEmpty else { return art }
         return art + 3 + ceil((item.text as NSString).size(withAttributes: textAttrs(.black)).width)
     }
@@ -92,23 +110,18 @@ enum SyringeIcon {
                 drawSyringe(remaining: item.remaining, locked: item.locked)
                 NSGraphicsContext.restoreGraphicsState()
 
-                // Badge: the needle tip (x + 21.8 * scale) sits just inside its rim.
-                let cx = x + 21.8 * scale + badgeRadius - 0.6
-                let badge = NSRect(x: cx - badgeRadius, y: height / 2 - badgeRadius,
-                                   width: badgeRadius * 2, height: badgeRadius * 2)
+                // Badge: the needle tip (x + 21.8 * scale) pokes just inside it.
+                let tip = x + 21.8 * scale - 0.6
+                let badgeRight: CGFloat
                 if let art = customIcon(for: item.provider) {
-                    // User art, clipped to the circle; dimmed while in lockout.
-                    NSGraphicsContext.saveGraphicsState()
-                    NSColor.white.set()
-                    NSBezierPath(ovalIn: badge).fill()
-                    NSBezierPath(ovalIn: badge).addClip()
-                    art.draw(in: badge, from: .zero, operation: .sourceOver, fraction: item.locked ? 0.35 : 1)
-                    NSGraphicsContext.restoreGraphicsState()
-                    let ring = NSBezierPath(ovalIn: badge.insetBy(dx: 0.4, dy: 0.4))
-                    ring.lineWidth = 0.8
-                    color.set()
-                    ring.stroke()
+                    // User-supplied logo, filling its box, tinted to the state colour.
+                    let box = NSRect(x: tip, y: (height - logoSide) / 2, width: logoSide, height: logoSide)
+                    tinted(art, color, side: logoSide).draw(in: box)
+                    badgeRight = box.maxX
                 } else {
+                    let cx = tip + badgeRadius
+                    let badge = NSRect(x: cx - badgeRadius, y: height / 2 - badgeRadius,
+                                       width: badgeRadius * 2, height: badgeRadius * 2)
                     NSBezierPath(ovalIn: badge).fill()
                     let letterAttrs: [NSAttributedString.Key: Any] = [
                         .font: NSFont.systemFont(ofSize: 7, weight: .heavy), .foregroundColor: NSColor.white,
@@ -116,9 +129,10 @@ enum SyringeIcon {
                     let ls = (item.letter as NSString).size(withAttributes: letterAttrs)
                     (item.letter as NSString).draw(at: NSPoint(x: cx - ls.width / 2, y: height / 2 - ls.height / 2 + 0.2),
                                                    withAttributes: letterAttrs)
+                    badgeRight = badge.maxX
                 }
 
-                var next = cx + badgeRadius
+                var next = badgeRight
                 if !item.text.isEmpty {
                     let attrs = textAttrs(color)
                     let ts = (item.text as NSString).size(withAttributes: attrs)

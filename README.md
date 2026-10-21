@@ -66,7 +66,7 @@ cd morphine
 
 ### 배지에 로고 넣기 (선택)
 
-Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`, `antigravity.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요 (정사각형 PNG 권장).
+Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`, `antigravity.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요. 로고는 배지 칸을 꽉 채우고, 작동 중엔 파란색·대기 중엔 회색으로 칠해져요 (배경이 투명한 PNG 권장).
 
 ### 도구별로 한 번만 할 일
 
