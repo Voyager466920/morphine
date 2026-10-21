@@ -1,0 +1,10 @@
+{
+  "name": "morphine",
+  "version": "0.1.0",
+  "description": "Sedates Claude Code when the 5-hour/weekly usage window is nearly drained (zero tokens while waiting) and wakes it when the window refills.",
+  "author": { "name": "Voyager466920" },
+  "homepage": "https://github.com/Voyager466920/morphine",
+  "repository": "https://github.com/Voyager466920/morphine",
+  "license": "MIT",
+  "keywords": ["usage", "rate-limit", "quota", "auto-resume", "menu-bar"]
+}

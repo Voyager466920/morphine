@@ -1,0 +1,11 @@
+{
+  "name": "morphine",
+  "owner": { "name": "Voyager466920" },
+  "plugins": [
+    {
+      "name": "morphine",
+      "source": "./",
+      "description": "Zero-token usage-cooldown guard: waits out the 5h/weekly reset, then resumes the agent."
+    }
+  ]
+}

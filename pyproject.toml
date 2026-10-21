@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "morphine-guard"
+dynamic = ["version"]
+description = "Sedate AI coding agents through usage cooldowns: zero-token wait, auto-resume after reset."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [{ name = "Voyager466920" }]
+classifiers = ["Operating System :: MacOS", "Operating System :: POSIX :: Linux", "Environment :: Console"]
+
+[project.urls]
+Homepage = "https://github.com/Voyager466920/morphine"
+
+[project.scripts]
+morphine = "morphine.cli:main"
+
+[tool.setuptools]
+packages = ["morphine", "morphine.adapters"]
+
+[tool.setuptools.dynamic]
+version = { attr = "morphine.__version__" }
