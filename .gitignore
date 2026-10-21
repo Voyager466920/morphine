@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.build/
+app/MorphineBar/.build/
+dist/
+*.app
+.DS_Store
