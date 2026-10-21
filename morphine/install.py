@@ -161,30 +161,6 @@ def install_gemini(dry_run: bool = False) -> List[str]:
     return notes
 
 
-# ------------------------------------------------------------- Antigravity
-
-def antigravity_hooks_path() -> Path:
-    return Path(os.environ.get("GEMINI_HOME", "~/.gemini")).expanduser() / "antigravity-cli" / "hooks.json"
-
-
-def install_antigravity(dry_run: bool = False) -> List[str]:
-    path = antigravity_hooks_path()
-    s = read_json(path, {}) or {}
-    hook = {"type": "command", "command": f"{morphine_cmd()} hook antigravity", "timeout": WAIT_SEC}
-    s["morphine"] = {
-        "PreToolUse": [{"matcher": ".*", "hooks": [hook]}],
-        "PreInvocation": [{"hooks": [dict(hook)]}],
-    }
-    notes = []
-    if not dry_run:
-        b = _backup(path)
-        write_json_atomic(path, s)
-        if b:
-            notes.append(f"backup: {b}")
-    notes += [f"edited {path}", "Antigravity support is experimental (undocumented local RPC)."]
-    return notes
-
-
 # -------------------------------------------------------------------- Grok
 
 def install_grok(dry_run: bool = False) -> List[str]:
@@ -199,7 +175,6 @@ INSTALLERS = {
     "claude": install_claude,
     "codex": install_codex,
     "gemini": install_gemini,
-    "antigravity": install_antigravity,
     "grok": install_grok,
 }
 
@@ -231,12 +206,6 @@ def uninstall_all(dry_run: bool = False) -> List[str]:
             _backup(path)
             write_json_atomic(path, s)
         notes.append(f"cleaned {path}")
-    ag = read_json(antigravity_hooks_path())
-    if isinstance(ag, dict) and "morphine" in ag:
-        del ag["morphine"]
-        if not dry_run:
-            write_json_atomic(antigravity_hooks_path(), ag)
-        notes.append(f"cleaned {antigravity_hooks_path()}")
     cp = codex_config_path()
     if cp.exists() and "# >>> morphine >>>" in cp.read_text(encoding="utf-8"):
         text = cp.read_text(encoding="utf-8")

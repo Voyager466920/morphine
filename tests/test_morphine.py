@@ -16,7 +16,6 @@ sys.path.insert(0, str(ROOT))
 
 from morphine import config, guard, install, state  # noqa: E402
 from morphine.adapters import codex, gemini, get_usage  # noqa: E402
-from morphine.adapters.antigravity import usage_from_status  # noqa: E402
 from morphine.adapters.base import Usage, Window  # noqa: E402
 from morphine.adapters.claude import usage_from_rate_limits  # noqa: E402
 from morphine.util import parse_ts  # noqa: E402
@@ -61,15 +60,6 @@ class TestParsing(unittest.TestCase):
         }, "oauth")
         self.assertEqual([w.name for w in oa.windows], ["5h", "7d"])
         self.assertEqual(oa.windows[0].used_pct, 97.0)
-
-    def test_antigravity_picks_worst_pool(self):
-        data = {"userStatus": {"pools": [
-            {"name": "a", "remainingFraction": 0.6, "resetTime": "2030-01-01T00:00:00Z"},
-            {"name": "b", "remainingFraction": 0.01, "resetTime": "2030-01-01T01:00:00Z"},
-        ]}}
-        u = usage_from_status(data)
-        self.assertAlmostEqual(u.windows[0].used_pct, 99.0)
-        self.assertEqual(u.windows[0].resets_at, parse_ts("2030-01-01T01:00:00Z"))
 
     def test_parse_reset_variants(self):
         base = time.mktime((2026, 10, 21, 10, 0, 0, 0, 0, -1))
@@ -235,6 +225,19 @@ class TestAdapters(Env):
         self.assertAlmostEqual(five.resets_at, parse_ts(ts) + 600)
         self.assertEqual((week.name, week.resets_at), ("7d", 1893500000.0))
 
+    def test_find_codex_in_vscode_extension(self):
+        fake_home = self.home / "h"
+        b = fake_home / ".vscode/extensions/openai.chatgpt-1.2.3/bin/macos-aarch64"
+        b.mkdir(parents=True)
+        exe = b / "codex"
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+        with mock.patch("shutil.which", return_value=None), \
+                mock.patch("pathlib.Path.home", return_value=fake_home), \
+                mock.patch.dict(os.environ, {"HOME": str(fake_home)}):
+            self.assertEqual(codex.find_codex({}), str(exe))
+            self.assertEqual(codex.find_codex({"providers": {"codex": {"path": str(exe)}}}), str(exe))
+
     def test_codex_app_server_shape(self):
         u = codex.usage_from_rate_limits({
             "primary": {"usedPercent": 50, "windowDurationMins": 300, "resetsAt": 1893456000},
@@ -313,8 +316,6 @@ class TestHookCLI(Env):
         self.assertEqual((r.returncode, r.stdout), (0, ""))
         r = self._run(["hook", "gemini"], "{}")
         self.assertEqual(r.stdout.strip(), "{}")
-        r = self._run(["hook", "antigravity"], "{}")
-        self.assertEqual(json.loads(r.stdout), {"allow_tool": True})
 
     def test_grok_running_claude_hook_is_not_judged_by_claude_quota(self):
         sl = {"rate_limits": {"five_hour": {"used_percentage": 99.9, "resets_at": time.time() + 3600}}}
@@ -373,13 +374,10 @@ class TestInstall(Env):
         install.uninstall_all()
         self.assertNotIn("morphine", cp.read_text())
 
-    def test_gemini_and_antigravity(self):
+    def test_gemini(self):
         install.install_gemini()
         s = json.loads(install.gemini_settings_path().read_text())
         self.assertEqual(s["hooks"]["BeforeTool"][0]["hooks"][0]["timeout"], install.WAIT_SEC * 1000)
-        install.install_antigravity()
-        a = json.loads(install.antigravity_hooks_path().read_text())
-        self.assertIn("PreToolUse", a["morphine"])
 
 
 @unittest.skipUnless(sys.platform != "win32", "needs a pty")

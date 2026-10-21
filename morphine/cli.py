@@ -117,10 +117,7 @@ def cmd_hook(args: argparse.Namespace) -> int:
     # Claude hook judge Grok by Claude's quota.
     if os.environ.get("GROK_HOOK_EVENT") or os.environ.get("GROK_SESSION_ID"):
         provider = "grok"
-    if provider == "antigravity":
-        allow = "{}" if "Invocation" in str(event) else '{"allow_tool": true}'
-    else:
-        allow = ALLOW_OUTPUT.get(provider, "")
+    allow = ALLOW_OUTPUT.get(provider, "")
     try:
         cfg = config.load()
         if provider in ADAPTERS and ADAPTERS[provider].supports_preemptive \
@@ -288,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_run)
 
     s = sub.add_parser("install", help="add Morphine hooks to agent CLIs")
-    s.add_argument("targets", nargs="*", help="claude codex gemini antigravity grok | all")
+    s.add_argument("targets", nargs="*", help="claude codex gemini grok | all")
     s.add_argument("--dry-run", action="store_true")
     s.add_argument("--no-hooks", action="store_true", help="claude: status line only (hooks via plugin)")
     s.add_argument("--no-statusline", action="store_true")

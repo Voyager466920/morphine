@@ -1,7 +1,7 @@
 import AppKit
 
 /// Menu bar art. Each agent gets a syringe "injecting" into a lettered badge
-/// (C = Claude, O = Codex/OpenAI, G = Gemini, X = Grok/xAI, A = Antigravity),
+/// (C = Claude, O = Codex/OpenAI, G = Gemini, X = Grok/xAI),
 /// followed by how much of its SHORTEST usage window (5h, else daily, else weekly) is LEFT. Blue = running,
 /// gray with a pause mark = waiting out a cooldown (countdown instead of %).
 enum SyringeIcon {
@@ -50,7 +50,6 @@ enum SyringeIcon {
         case "codex": return "O"
         case "gemini": return "G"
         case "grok": return "X"
-        case "antigravity": return "A"
         default: return String(provider.prefix(1)).uppercased()
         }
     }

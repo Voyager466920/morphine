@@ -87,7 +87,7 @@ struct PanelView: View {
 
     private var providersSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(store.snapshot?.providers ?? []) { p in
+            ForEach(store.visibleProviders) { p in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         badge(p.id)
@@ -112,6 +112,14 @@ struct PanelView: View {
             }
             if store.snapshot == nil {
                 Text(L.t("Loading…", "불러오는 중…")).font(.caption).foregroundStyle(.secondary)
+            } else if store.visibleProviders.isEmpty {
+                Text(L.t("No agent usage yet — use Claude Code or Codex once.",
+                         "아직 사용량이 없어요 — Claude Code나 Codex를 한 번 사용해 보세요."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if !store.hiddenProviders.isEmpty {
+                Text(L.t("Not connected: ", "연결 안 됨: ") + store.hiddenProviders.map(\.name).joined(separator: ", "))
+                    .font(.caption2).foregroundStyle(.tertiary)
             }
         }
     }
@@ -139,7 +147,7 @@ struct PanelView: View {
         return .blue
     }
 
-    /// Same lettered badge the menu bar uses (C Claude · O Codex · G Gemini · X Grok · A Antigravity).
+    /// Same lettered badge the menu bar uses (C Claude · O Codex · G Gemini · X Grok).
     private func badge(_ id: String) -> some View {
         let locked = store.waiting.contains { $0.provider == id }
         return Group {

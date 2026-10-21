@@ -27,12 +27,11 @@ else
 fi
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  for t in claude codex gemini antigravity grok; do
+  for t in claude codex gemini grok; do
     case $t in
       claude) [[ -d "$HOME/.claude" ]] || command -v claude >/dev/null && TARGETS+=(claude) ;;
       codex) [[ -d "$HOME/.codex" ]] || command -v codex >/dev/null && TARGETS+=(codex) ;;
       gemini) command -v gemini >/dev/null && TARGETS+=(gemini) ;;
-      antigravity) [[ -d "$HOME/.gemini/antigravity-cli" ]] || command -v agy >/dev/null && TARGETS+=(antigravity) ;;
       grok) command -v grok >/dev/null && TARGETS+=(grok) ;;
     esac
   done
@@ -41,7 +40,7 @@ fi
 if [[ ${#TARGETS[@]} -gt 0 ]]; then
   "$MORPHINE" install "${TARGETS[@]}"
 else
-  echo "No agent CLIs detected. Later: morphine install claude codex gemini antigravity grok"
+  echo "No agent CLIs detected. Later: morphine install claude codex gemini grok"
 fi
 
 case ":$PATH:" in

@@ -7,7 +7,7 @@
 <p align="center">
   <b>Amphetamine keeps your Mac awake. Morphine puts your AI agent under until its usage refills.</b><br>
   When the 5-hour or weekly usage window is nearly drained, Morphine pauses the agent (spending <b>zero tokens</b> while it waits)<br>
-  and wakes it the moment the window resets. Works with Claude Code, Codex, Gemini CLI, Antigravity and Grok Build.
+  and wakes it the moment the window resets. Works with Claude Code, Codex, Gemini CLI and Grok Build.
 </p>
 
 <p align="center"><a href="#english">English</a> · <a href="#한국어">한국어</a></p>
@@ -27,7 +27,7 @@
 
 <p align="center"><img src="app/Resources/menubar-preview.png" width="420" alt="메뉴바 아이콘 상태"></p>
 
-도구마다 주사기 하나가 글자 배지에 "주입"돼요: **C** Claude · **O** Codex · **G** Gemini · **X** Grok · **A** Antigravity. 숫자 = 그 도구의 **남은** 사용량 (5시간 한도 기준, 5시간 한도가 없는 도구는 그다음 짧은 한도) · 약 2초마다 갱신 · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
+도구마다 주사기 하나가 글자 배지에 "주입"돼요: **C** Claude · **O** Codex · **G** Gemini · **X** Grok. 숫자 = 그 도구의 **남은** 사용량 (5시간 한도 기준, 5시간 한도가 없는 도구는 그다음 짧은 한도) · 약 2초마다 갱신 · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
 
 ### 지원 범위
 
@@ -35,7 +35,6 @@
 |---|---|---|---|
 | **Claude Code** | status line의 `rate_limits` (공식) → OAuth usage API | PreToolUse + UserPromptSubmit 훅 | ✅ 5시간·주간 |
 | **Codex** | `codex app-server` `account/rateLimits/read` → 세션 로그 | PreToolUse + UserPromptSubmit 훅 | ✅ 5시간·주간 |
-| **Antigravity** | 로컬 RPC `GetUserStatus` (실험적) | PreToolUse + PreInvocation 훅 | ✅ 5시간 (주간은 안 나옴) |
 | **Gemini CLI** | 세션 파일로 하루 요청 수 **추정** | BeforeTool 훅 / PTY 래퍼 | ⚠️ 추정치라 기본은 표시만 |
 | **Grok Build** | 공개된 사용량 정보 없음 | PTY 래퍼 (한도 메시지 감지) | ❌ 걸린 뒤 대기 → 재개 |
 
@@ -66,7 +65,7 @@ cd morphine
 
 ### 배지에 로고 넣기 (선택)
 
-Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`, `antigravity.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요. 로고는 배지 칸을 꽉 채우고, 작동 중엔 파란색·대기 중엔 회색으로 칠해져요 (배경이 투명한 PNG 권장).
+Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요. 로고는 배지 칸을 꽉 채우고, 작동 중엔 파란색·대기 중엔 회색으로 칠해져요 (배경이 투명한 PNG 권장).
 
 ### 도구별로 한 번만 할 일
 
@@ -94,7 +93,7 @@ morphine uninstall                        # 모든 훅 제거 (백업 남김)
 - **기준을 너무 낮추면 빠듯해요.** 훅은 도구 호출 직전에 확인하는데, 응답 한 번에 2~3%를 쓰는 경우도 있어서 기본값을 5%로 뒀어요.
 - **대기하는 동안 Mac이 잠들면 안 돼요.** 대기 중에는 `caffeinate -i`로 잠자기를 막아요. 다만 MacBook 덮개를 닫으면 잠들 수 있어요.
 - **재개 직후 첫 호출은 조금 비싸요.** 몇 시간 쉬면 프롬프트 캐시가 만료돼서, 재개 후 첫 호출에서 캐시를 다시 쓰기 때문이에요.
-- **비공식 경로는 깨질 수 있어요.** Codex app-server, Antigravity RPC, Claude OAuth usage API는 공식 문서에 없어요. 업데이트로 바뀌면 그 도구만 "알 수 없음"이 되고, 에이전트를 막지는 않아요.
+- **비공식 경로는 깨질 수 있어요.** Codex app-server와 Claude OAuth usage API는 공식 문서에 없어요. 업데이트로 바뀌면 그 도구만 "알 수 없음"이 되고, 에이전트를 막지는 않아요.
 - **훅은 오래 대기해요.** 주간 한도를 기다릴 수 있도록 훅 timeout을 8일로 설정해요. 대기 중 에이전트 화면에는 훅이 실행 중인 것으로 보여요.
 
 ---
@@ -107,7 +106,6 @@ morphine uninstall                        # 모든 훅 제거 (백업 남김)
 |---|---|---|---|
 | Claude Code | status line `rate_limits` → OAuth usage API | PreToolUse + UserPromptSubmit hooks | ✅ 5h & weekly |
 | Codex | `codex app-server` `account/rateLimits/read` → session logs | PreToolUse + UserPromptSubmit hooks | ✅ 5h & weekly |
-| Antigravity | local `GetUserStatus` RPC (experimental) | PreToolUse + PreInvocation hooks | ✅ 5h only |
 | Gemini CLI | estimated from session files | BeforeTool hook / PTY wrapper | ⚠️ estimate, display-only by default |
 | Grok Build | none published | PTY wrapper (detects limit message) | ❌ waits after the limit hits |
 

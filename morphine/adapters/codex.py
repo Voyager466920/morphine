@@ -124,10 +124,37 @@ def fetch_from_sessions() -> Usage:
 
 # ---------------------------------------------------------- app-server RPC
 
-def fetch_from_app_server(timeout: float = 8.0) -> Usage:
+def find_codex(cfg: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """Locate a `codex` binary even when it isn't on PATH (menu bar apps get a bare
+    PATH, and the VS Code / Cursor extensions ship their own copy)."""
+    override = ((cfg or {}).get("providers", {}).get("codex", {}) or {}).get("path")
+    if override and os.access(os.path.expanduser(override), os.X_OK):
+        return os.path.expanduser(override)
     exe = shutil.which("codex")
+    if exe:
+        return exe
+    home = Path.home()
+    fixed = [Path("/opt/homebrew/bin/codex"), Path("/usr/local/bin/codex"), home / ".local/bin/codex",
+             home / ".npm-global/bin/codex", home / ".bun/bin/codex", home / ".volta/bin/codex"]
+    for p in fixed:
+        if os.access(p, os.X_OK):
+            return str(p)
+    globs = ["~/.nvm/versions/node/*/bin/codex",
+             "~/.vscode/extensions/openai.chatgpt-*/bin/*/codex",
+             "~/.cursor/extensions/openai.chatgpt-*/bin/*/codex",
+             "~/.windsurf/extensions/openai.chatgpt-*/bin/*/codex"]
+    import glob as _glob
+
+    found = [Path(p) for g in globs for p in _glob.glob(os.path.expanduser(g)) if os.access(p, os.X_OK)]
+    if found:
+        return str(max(found, key=lambda p: p.stat().st_mtime))  # newest install
+    return None
+
+
+def fetch_from_app_server(timeout: float = 8.0, cfg: Optional[Dict[str, Any]] = None) -> Usage:
+    exe = find_codex(cfg)
     if not exe:
-        return Usage(provider="codex", source="app-server", error="codex not on PATH")
+        return Usage(provider="codex", source="app-server", error="codex binary not found")
     try:
         proc = subprocess.Popen(
             [exe, "app-server"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -199,7 +226,7 @@ class CodexAdapter(Adapter):
         return u if u.ok else None
 
     def fetch(self, cfg: Dict[str, Any]) -> Usage:
-        live = fetch_from_app_server()
+        live = fetch_from_app_server(cfg=cfg)
         if live.ok:
             return live
         logged = fetch_from_sessions()

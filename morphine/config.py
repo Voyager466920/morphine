@@ -44,7 +44,6 @@ DEFAULTS: Dict[str, Any] = {
     "providers": {
         "claude": {"enabled": True},
         "codex": {"enabled": True},
-        "antigravity": {"enabled": True},
         "gemini": {
             "enabled": True,
             # Gemini CLI exposes no quota endpoint; usage is estimated from

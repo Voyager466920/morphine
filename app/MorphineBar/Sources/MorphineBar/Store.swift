@@ -45,6 +45,18 @@ final class Store: ObservableObject {
         didSet { UserDefaults.standard.set(showAllAgents, forKey: "showAllAgents") }
     }
 
+    /// Providers worth showing: they have usage numbers, or an agent is waiting on them.
+    var visibleProviders: [Provider] {
+        (snapshot?.providers ?? []).filter { p in
+            !p.windows.isEmpty || waiting.contains { $0.provider == p.id }
+        }
+    }
+
+    var hiddenProviders: [Provider] {
+        let shown = Set(visibleProviders.map(\.id))
+        return (snapshot?.providers ?? []).filter { !shown.contains($0.id) }
+    }
+
     /// What the menu bar shows for a provider: the SHORTEST window it has —
     /// the 5-hour window when present, otherwise the daily, otherwise the weekly.
     func remaining(of p: Provider) -> (pct: Double, estimated: Bool)? {
@@ -188,21 +200,34 @@ final class Store: ObservableObject {
         return nil
     }
 
-    /// GUI apps get a bare PATH; borrow the login shell's so `codex`, `agy`, etc. resolve.
+    /// GUI apps get a bare PATH; borrow the login shell's so `codex` etc. resolve.
     private func environmentPath() -> String {
         if let p = shellPath { return p }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var path = "/opt/homebrew/bin:/usr/local/bin:\(home)/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        proc.arguments = ["-lc", "printf %s \"$PATH\""]
+        // Interactive login shell so ~/.zshrc (nvm, npm prefixes, …) is applied too;
+        // markers keep any prompt/banner noise out of the result.
+        proc.arguments = ["-ilc", "printf '__MORPHINE_PATH__%s__END__' \"$PATH\""]
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = FileHandle.nullDevice
+        proc.standardInput = FileHandle.nullDevice
+        let done = DispatchSemaphore(value: 0)
+        proc.terminationHandler = { _ in done.signal() }
         if (try? proc.run()) != nil {
-            proc.waitUntilExit()
-            let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            if !out.isEmpty { path = out + ":" + path }
+            // Never hang the app on a slow or interactive ~/.zshrc.
+            if done.wait(timeout: .now() + 4) == .timedOut {
+                proc.terminate()
+                shellPath = path
+                return path
+            }
+            let raw = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            if let a = raw.range(of: "__MORPHINE_PATH__"), let b = raw.range(of: "__END__", range: a.upperBound..<raw.endIndex) {
+                let out = String(raw[a.upperBound..<b.lowerBound])
+                if !out.isEmpty { path = out + ":" + path }
+            }
         }
         shellPath = path
         return path

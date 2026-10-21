@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from morphine import config
-from morphine.adapters.antigravity import AntigravityAdapter
 from morphine.adapters.base import Adapter, Usage, Window
 from morphine.adapters.claude import ClaudeAdapter
 from morphine.adapters.codex import CodexAdapter
@@ -14,7 +13,7 @@ from morphine.adapters.grok import GrokAdapter
 from morphine.util import now, read_json, write_json_atomic
 
 ADAPTERS: Dict[str, Adapter] = {
-    a.id: a for a in (ClaudeAdapter(), CodexAdapter(), AntigravityAdapter(), GeminiAdapter(), GrokAdapter())
+    a.id: a for a in (ClaudeAdapter(), CodexAdapter(), GeminiAdapter(), GrokAdapter())
 }
 
 __all__ = ["ADAPTERS", "Adapter", "Usage", "Window", "get_usage", "cached_usage"]
