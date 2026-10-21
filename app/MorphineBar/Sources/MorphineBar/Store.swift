@@ -67,17 +67,17 @@ final class Store: ObservableObject {
             let letter = SyringeIcon.letter(for: p.id)
             if let w = waiting.filter({ $0.provider == p.id }).min(by: { $0.resumeAt < $1.resumeAt }) {
                 let left = w.resumeAt - now.timeIntervalSince1970
-                items.append((.init(letter: letter, remaining: nil, locked: true, text: Fmt.duration(left)), -1))
+                items.append((.init(provider: p.id, letter: letter, remaining: nil, locked: true, text: Fmt.duration(left)), -1))
             } else if let r = remaining(of: p) {
                 let text = showPercent ? "\(r.estimated ? "~" : "")\(Int(r.pct.rounded()))%" : ""
-                items.append((.init(letter: letter, remaining: r.pct / 100, locked: false, text: text), r.pct))
+                items.append((.init(provider: p.id, letter: letter, remaining: r.pct / 100, locked: false, text: text), r.pct))
             }
         }
         // Wrapper sessions with a custom --provider label.
         for w in waiting where !seen.contains(w.provider) {
             seen.insert(w.provider)
             let left = w.resumeAt - now.timeIntervalSince1970
-            items.append((.init(letter: SyringeIcon.letter(for: w.provider), remaining: nil, locked: true,
+            items.append((.init(provider: w.provider, letter: SyringeIcon.letter(for: w.provider), remaining: nil, locked: true,
                                 text: Fmt.duration(left)), -1))
         }
         if !showAllAgents, let top = items.min(by: { $0.1 < $1.1 }) { return [top.0] }
@@ -107,6 +107,7 @@ final class Store: ObservableObject {
     // MARK: - Actions
 
     func refresh(network: Bool) {
+        if network { SyringeIcon.reloadCustomIcons() }  // pick up newly added badge art
         var args = ["status", "--json"]
         if !network { args.append("--cached") }
         Task {

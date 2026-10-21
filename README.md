@@ -64,6 +64,10 @@ cd morphine
 
 플러그인으로 설치했다면 사용량을 status line으로 받을 수 있게 한 번만 더 실행하세요: `morphine install claude --no-hooks`.
 
+### 배지에 로고 넣기 (선택)
+
+Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`, `antigravity.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요 (정사각형 PNG 권장).
+
 ### 도구별로 한 번만 할 일
 
 - **Codex:** 처음 설치한 뒤 `codex` 안에서 `/hooks`를 열고, Morphine 훅 두 개를 **신뢰(trust)** 처리해야 동작해요 (Codex 보안 정책).

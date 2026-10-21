@@ -9,11 +9,30 @@ enum SyringeIcon {
     static let waiting = NSColor.systemGray
 
     struct Item: Equatable {
+        var provider: String
         var letter: String
         var remaining: Double?   // 0...1, nil = unknown
         var locked: Bool
         var text: String         // "97%", "~40%", "1:12:04", or "" to hide
     }
+
+    /// Optional user-supplied badge art: ~/.morphine/icons/<provider>.png (any square image).
+    /// Drawn inside the badge circle instead of the letter. Morphine ships no logos.
+    private static var customIcons: [String: NSImage?] = [:]
+
+    static func customIcon(for provider: String) -> NSImage? {
+        if let cached = customIcons[provider] { return cached }
+        let home = ProcessInfo.processInfo.environment["MORPHINE_HOME"]
+            ?? (FileManager.default.homeDirectoryForCurrentUser.path + "/.morphine")
+        var img: NSImage?
+        for ext in ["png", "jpg", "jpeg", "pdf", "icns"] {
+            if let i = NSImage(contentsOfFile: "\(home)/icons/\(provider).\(ext)") { img = i; break }
+        }
+        customIcons[provider] = .some(img)
+        return img
+    }
+
+    static func reloadCustomIcons() { customIcons.removeAll() }
 
     static func letter(for provider: String) -> String {
         switch provider {
@@ -77,13 +96,27 @@ enum SyringeIcon {
                 let cx = x + 21.8 * scale + badgeRadius - 0.6
                 let badge = NSRect(x: cx - badgeRadius, y: height / 2 - badgeRadius,
                                    width: badgeRadius * 2, height: badgeRadius * 2)
-                NSBezierPath(ovalIn: badge).fill()
-                let letterAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 7, weight: .heavy), .foregroundColor: NSColor.white,
-                ]
-                let ls = (item.letter as NSString).size(withAttributes: letterAttrs)
-                (item.letter as NSString).draw(at: NSPoint(x: cx - ls.width / 2, y: height / 2 - ls.height / 2 + 0.2),
-                                               withAttributes: letterAttrs)
+                if let art = customIcon(for: item.provider) {
+                    // User art, clipped to the circle; dimmed while in lockout.
+                    NSGraphicsContext.saveGraphicsState()
+                    NSColor.white.set()
+                    NSBezierPath(ovalIn: badge).fill()
+                    NSBezierPath(ovalIn: badge).addClip()
+                    art.draw(in: badge, from: .zero, operation: .sourceOver, fraction: item.locked ? 0.35 : 1)
+                    NSGraphicsContext.restoreGraphicsState()
+                    let ring = NSBezierPath(ovalIn: badge.insetBy(dx: 0.4, dy: 0.4))
+                    ring.lineWidth = 0.8
+                    color.set()
+                    ring.stroke()
+                } else {
+                    NSBezierPath(ovalIn: badge).fill()
+                    let letterAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont.systemFont(ofSize: 7, weight: .heavy), .foregroundColor: NSColor.white,
+                    ]
+                    let ls = (item.letter as NSString).size(withAttributes: letterAttrs)
+                    (item.letter as NSString).draw(at: NSPoint(x: cx - ls.width / 2, y: height / 2 - ls.height / 2 + 0.2),
+                                                   withAttributes: letterAttrs)
+                }
 
                 var next = cx + badgeRadius
                 if !item.text.isEmpty {
