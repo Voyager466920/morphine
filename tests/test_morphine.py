@@ -355,24 +355,26 @@ class TestInstall(Env):
         self.assertNotIn("UserPromptSubmit", s["hooks"])
         self.assertEqual([h["command"] for g in s["hooks"]["PreToolUse"] for h in g["hooks"]], ["guard.sh"])
 
-    def test_codex_block_replaced_not_duplicated(self):
+    def test_codex_hooks_json_and_legacy_cleanup(self):
         cp = install.codex_config_path()
         cp.parent.mkdir(parents=True)
-        cp.write_text('model = "gpt-5"\n')
+        cp.write_text('model = "gpt-5"\n\n# >>> morphine >>>\n[[hooks.PreToolUse]]\n# <<< morphine <<<\n')
+        hp = install.codex_hooks_path()
+        hp.write_text(json.dumps({"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [
+            {"type": "command", "command": "mine.sh"}]}]}}))
         install.install_codex()
         install.install_codex()
-        text = cp.read_text()
-        self.assertEqual(text.count("# >>> morphine >>>"), 1)
-        self.assertTrue(text.startswith('model = "gpt-5"'))
-        try:
-            import tomllib
-        except ImportError:
-            tomllib = None
-        if tomllib:
-            data = tomllib.loads(text)
-            self.assertIn("hook codex", data["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
-        install.uninstall_all()
         self.assertNotIn("morphine", cp.read_text())
+        self.assertTrue(cp.read_text().startswith('model = "gpt-5"'))
+        h = json.loads(hp.read_text())["hooks"]
+        cmds = [x["command"] for g in h["PreToolUse"] for x in g["hooks"]]
+        self.assertEqual(sum("hook codex" in c for c in cmds), 1)
+        self.assertIn("mine.sh", cmds)
+        self.assertEqual(h["PreToolUse"][-1]["hooks"][0]["timeout"], install.WAIT_SEC)
+        install.uninstall_all()
+        h = json.loads(hp.read_text())["hooks"]
+        self.assertEqual([x["command"] for g in h["PreToolUse"] for x in g["hooks"]], ["mine.sh"])
+        self.assertNotIn("UserPromptSubmit", h)
 
     def test_gemini(self):
         install.install_gemini()

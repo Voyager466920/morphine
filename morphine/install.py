@@ -93,43 +93,50 @@ def install_claude(hooks: bool = True, statusline: bool = True, dry_run: bool = 
 
 # ------------------------------------------------------------------- Codex
 
+def codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
+
+
 def codex_config_path() -> Path:
-    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser() / "config.toml"
+    return codex_home() / "config.toml"
 
 
-CODEX_BLOCK = """
-# >>> morphine >>>
-[[hooks.PreToolUse]]
-matcher = ".*"
-[[hooks.PreToolUse.hooks]]
-type = "command"
-command = "{cmd} hook codex"
-timeout = {timeout}
-statusMessage = "Morphine: checking usage window"
+def codex_hooks_path() -> Path:
+    return codex_home() / "hooks.json"
 
-[[hooks.UserPromptSubmit]]
-[[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = "{cmd} hook codex"
-timeout = {timeout}
-# <<< morphine <<<
-"""
+
+def _strip_legacy_codex_block(dry_run: bool) -> bool:
+    """Older Morphine versions wrote an inline block into config.toml."""
+    cp = codex_config_path()
+    if not cp.exists():
+        return False
+    text = cp.read_text(encoding="utf-8")
+    if "# >>> morphine >>>" not in text:
+        return False
+    start = text.index("# >>> morphine >>>")
+    end = text.index("# <<< morphine <<<", start) + len("# <<< morphine <<<")
+    if not dry_run:
+        _backup(cp)
+        cp.write_text(text[:start].rstrip("\n") + "\n" + text[end:].lstrip("\n"), encoding="utf-8")
+    return True
 
 
 def install_codex(dry_run: bool = False) -> List[str]:
-    path = codex_config_path()
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
-    if "# >>> morphine >>>" in text:
-        start = text.index("# >>> morphine >>>")
-        end = text.index("# <<< morphine <<<", start) + len("# <<< morphine <<<")
-        text = (text[:start].rstrip("\n") + "\n" + text[end:].lstrip("\n")).strip("\n") + "\n"
-    cmd = morphine_cmd().replace("\\", "\\\\").replace('"', '\\"')
-    text = text.rstrip("\n") + "\n" + CODEX_BLOCK.format(cmd=cmd, timeout=WAIT_SEC)
+    # hooks.json, not config.toml: the ChatGPT/Codex desktop app rewrites
+    # config.toml, while hooks.json is left alone.
+    path = codex_hooks_path()
+    s = read_json(path, {}) or {}
+    h = s.setdefault("hooks", {})
+    hook = {"type": "command", "command": f"{morphine_cmd()} hook codex", "timeout": WAIT_SEC,
+            "statusMessage": "Morphine: checking usage window"}
+    h["PreToolUse"] = _strip_ours(h.get("PreToolUse", [])) + [{"matcher": ".*", "hooks": [hook]}]
+    h["UserPromptSubmit"] = _strip_ours(h.get("UserPromptSubmit", [])) + [{"hooks": [dict(hook)]}]
     notes = []
+    if _strip_legacy_codex_block(dry_run):
+        notes.append(f"removed old Morphine block from {codex_config_path()}")
     if not dry_run:
-        path.parent.mkdir(parents=True, exist_ok=True)
         b = _backup(path)
-        path.write_text(text, encoding="utf-8")
+        write_json_atomic(path, s)
         if b:
             notes.append(f"backup: {b}")
     notes += [f"edited {path}", "Codex: open `codex`, run /hooks and trust the two Morphine hooks once."]
@@ -184,6 +191,7 @@ def uninstall_all(dry_run: bool = False) -> List[str]:
     for path, events in (
         (claude_settings_path(), ("PreToolUse", "UserPromptSubmit")),
         (gemini_settings_path(), ("BeforeTool", "BeforeAgent")),
+        (codex_hooks_path(), ("PreToolUse", "UserPromptSubmit")),
     ):
         s = read_json(path)
         if not isinstance(s, dict) or not _has_mark(s):
