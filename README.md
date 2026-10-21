@@ -6,8 +6,8 @@
 
 <p align="center">
   <b>Amphetamine keeps your Mac awake. Morphine puts your AI agent under until its usage refills.</b><br>
-  When the 5-hour or weekly usage window is nearly drained, Morphine pauses the agent (spending <b>zero tokens</b> while it waits)<br>
-  and wakes it the moment the window resets. Works with Claude Code, Codex, Gemini CLI and Grok Build.
+  When the 5-hour or weekly usage window is nearly drained, Morphine pauses the agent (spending <b>zero tokens</b> while it waits),<br>
+  checks back every 31 minutes, and wakes it as soon as the window has refilled. Works with Claude Code, Codex, Gemini CLI and Grok Build.
 </p>
 
 <p align="center"><a href="#english">English</a> · <a href="#한국어">한국어</a></p>
@@ -18,118 +18,201 @@
 
 ### 이게 뭔가요
 
-- **바닥나기 전에 미리 멈춤:** 에이전트(Claude Code, Codex 등)가 일하는 도중 5시간 한도나 주간 한도의 남은 양이 **5% 아래로 떨어지면** (설정 가능), 다음 도구 호출 직전에 그 자리에서 멈춰요.
-- **대기 중 토큰 0:** 멈춘 동안에는 모델을 한 번도 부르지 않아요. hook 프로세스가 리셋 시각까지 `sleep`할 뿐이에요.
-- **31분마다 확인 → 차면 자동 재개:** 멈춘 동안 31분마다 남은 양을 다시 확인하고 (리셋 시각을 알면 그 시각에도 한 번 더), 다시 차 있으면 그대로 이어서 작업해요.
-- **메뉴바 표시:** Mac 메뉴바의 주사기 아이콘에서 남은 양, 대기 중인지, 언제 재개하는지 보여줘요. 작동 중엔 **파란색**, 대기 중엔 **회색**이에요.
+- **바닥나기 전에 멈춤:** 에이전트가 일하는 도중 5시간 한도나 주간 한도의 남은 양이 **5% 아래**로 떨어지면 (기준은 바꿀 수 있어요), 다음 도구 호출 직전에 그 자리에서 멈춰요.
+- **대기 중 토큰 0:** 멈춘 동안 모델을 한 번도 부르지 않아요. 훅 프로세스가 기다리면서 사용량만 확인해요.
+- **31분마다 확인 → 차면 자동 재개:** 멈춘 동안 31분마다 남은 양을 다시 확인해요. 리셋 시각을 알면 그 시각에도 한 번 더 확인하고, 다시 차 있으면 멈췄던 작업을 그대로 이어서 해요.
+- **메뉴바 표시:** 도구마다 남은 양을 보여줘요. 작동 중엔 **파란색**, 대기 중엔 **회색**이에요.
 
-이름은 병원의 **모르핀 PCA 펌프**에서 왔어요. 버튼을 누르면 한 번 투여되고, 그다음엔 **잠금 시간(lockout)** 동안 아무리 눌러도 안 나와요. 쿨타임이 끝나면 다시 투여돼요.
+이름은 병원의 **모르핀 PCA 펌프**에서 왔어요. 버튼을 누르면 한 번 투여되고, 그다음엔 **잠금 시간(lockout)** 동안 아무리 눌러도 안 나와요.
 
 <p align="center"><img src="app/Resources/menubar-preview.png" width="420" alt="메뉴바 아이콘 상태"></p>
 
-도구마다 주사기 하나가 글자 배지에 "주입"돼요: **C** Claude · **O** Codex · **G** Gemini · **X** Grok. 숫자 = 그 도구의 **남은** 사용량 (5시간 한도 기준, 5시간 한도가 없는 도구는 그다음 짧은 한도) · 약 2초마다 갱신 · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
-
 ### 지원 범위
 
-| 도구 | 남은 양 읽는 곳 | 멈추는 방법 | 미리 멈춤 |
-|---|---|---|---|
-| **Claude Code** | status line의 `rate_limits` (공식) → OAuth usage API | PreToolUse + UserPromptSubmit 훅 | ✅ 5시간·주간 |
-| **Codex** | `codex app-server` `account/rateLimits/read` → 세션 로그 | PreToolUse + UserPromptSubmit 훅 | ✅ 5시간·주간 |
-| **Gemini CLI** | 세션 파일로 하루 요청 수 **추정** | BeforeTool 훅 / PTY 래퍼 | ⚠️ 추정치라 기본은 표시만 |
-| **Grok Build** | 공개된 사용량 정보 없음 | PTY 래퍼 (한도 메시지 감지) | ❌ 걸린 뒤 대기 → 재개 |
+| 도구 | 남은 양 읽는 곳 | 자동 멈춤 |
+|---|---|---|
+| **Claude Code** | Claude Code status line → Anthropic 사용량 서버 | ✅ 5시간·주간 (Claude Code 세션) |
+| **Codex** | `codex app-server` → Codex 대화 기록 | ✅ 5시간·주간 (CLI 확인됨, 앱·VS Code 확장은 미확인) |
+| **Gemini CLI** | 대화 기록으로 하루 요청 수 **추정** | ⚠️ 추정치라 기본은 표시만 |
+| **Grok Build** | 공개된 사용량 정보 없음 | ❌ 한도에 걸린 뒤 감지 → 31분마다 재시도 |
 
-어떤 도구든 사용량을 읽지 못하면 **절대 막지 않아요** (항상 통과).
+- **사용량을 못 읽으면 절대 막지 않아요.** 그 도구는 항상 통과시켜요.
+- **사용량은 계정 전체 기준이에요.** Claude 앱과 Claude Code, Codex 앱과 Codex CLI는 같은 요금제 한도를 같이 써서, 메뉴바 숫자에는 다 합쳐서 반영돼요.
 
 ### 설치
 
-**요구사항:** macOS 13 이상, `python3` 3.9 이상 (macOS 기본 탑재). 메뉴바 앱을 빌드하려면 Xcode Command Line Tools가 필요해요 (`xcode-select --install`).
+**요구사항:** macOS 13 이상, `python3` 3.9 이상 (macOS 기본 탑재), Xcode Command Line Tools (`xcode-select --install`, 메뉴바 앱 빌드용).
+
+아래 명령을 터미널에서 한 줄씩 실행하세요.
 
 ```bash
 git clone https://github.com/Voyager466920/morphine.git
 cd morphine
-./install.sh            # 메뉴바 앱 + CLI + 감지된 모든 도구에 훅 연결
+./install.sh
 ```
 
-- 메뉴바 앱은 `/Applications/Morphine.app`에 설치돼요.
-- CLI는 `~/.local/bin/morphine`에 링크돼요.
-- 원하는 도구만 연결하려면 `./install.sh claude codex`처럼 이름을 붙이면 돼요.
+- **메뉴바 앱:** `/Applications/Morphine.app`에 설치되고 바로 실행돼요.
+- **CLI:** `morphine` 명령이 `~/.local/bin/morphine`에 생겨요. `command not found`가 나오면 `~/.zshrc`에 `export PATH="$HOME/.local/bin:$PATH"`를 추가하세요.
+- **훅:** 이 Mac에서 찾은 도구(Claude Code, Codex, Gemini CLI, Grok)에 자동으로 연결돼요. 특정 도구만 연결하려면 `./install.sh claude codex`처럼 이름을 붙이세요.
 
-**Claude Code 플러그인으로 설치**하는 경우 (훅만 필요할 때):
+**업데이트:** 저장소 폴더에서 `git pull` 후 `app/scripts/bundle.sh --install`을 실행하세요.
 
-```
-/plugin marketplace add Voyager466920/morphine
-/plugin install morphine@morphine
-```
+### 도구 연결하기
 
-플러그인으로 설치했다면 사용량을 status line으로 받을 수 있게 한 번만 더 실행하세요: `morphine install claude --no-hooks`.
+**Claude**
 
-### 배지에 로고 넣기 (선택)
-
-Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 구한 이미지를 `~/.morphine/icons/claude.png`, `codex.png`, `gemini.png`, `grok.png`로 넣으세요. 1분 안에 메뉴바 배지가 글자 대신 그 이미지로 바뀌어요. 로고는 배지 칸을 꽉 채우고, 작동 중엔 파란색·대기 중엔 회색으로 칠해져요 (배경이 투명한 PNG 권장).
-
-### 도구별로 한 번만 할 일
-
-- **Codex:** 처음 설치한 뒤 `codex` 안에서 `/hooks`를 열고, Morphine 훅 두 개를 **신뢰(trust)** 처리해야 동작해요 (Codex 보안 정책).
-- **Grok Build:** `~/.zshrc`에 `alias grok='morphine run --provider grok -- command grok'`를 추가하세요.
-- **Gemini CLI:** 정확히 멈추고 싶으면 `alias gemini='morphine run --provider gemini -- command gemini'`처럼 래퍼로 실행하세요.
-- **Claude Code:** 이미 쓰던 status line이 있어도 그대로 보존돼요 (Morphine이 감싸서 뒤에 `💉 5h 18% left`처럼 남은 양만 붙여요).
-
-### 자주 쓰는 명령
+Claude Code 로그인이 필요해요. Claude 앱만 쓰더라도 사용량을 읽을 때 이 로그인 정보를 써요.
 
 ```bash
-morphine status                           # 모든 도구의 사용량
-morphine config set threshold_pct 3       # 남은 양 3% 미만에서 대기 (기본 5)
-morphine config set windows '["5h"]'      # 5시간 한도만 감시 (기본: 5h, 7d, 1d)
-morphine config set recheck_min 31        # 대기 중 확인 간격 (분, 기본 31)
-morphine config set recheck_at_reset false   # 리셋 시각 추가 확인 끄기 (31분 간격만)
-morphine config set keep_awake false      # 대기 중 잠자기 방지 끄기
-morphine resume                           # 대기 중인 에이전트 모두 지금 깨우기
-morphine run --provider grok -- grok      # 사용량 API가 없는 CLI를 래퍼로 실행
-morphine uninstall                        # 모든 훅 제거 (백업 남김)
+curl -fsSL https://claude.ai/install.sh | bash
 ```
+
+```bash
+claude
+```
+
+1. 브라우저에서 로그인하세요.
+2. "Claude Code-credentials" 키체인 접근 창이 뜨면 **항상 허용**을 누르세요.
+3. 1분 안에 메뉴바에 Claude가 떠요.
+
+Claude Code로 작업할 때 자동으로 멈추게 하려면 `morphine install claude`도 실행하세요. 기존 status line이 있으면 보존하고 뒤에 `💉 5h 18% left`만 붙여요.
+
+**Codex**
+
+Codex CLI가 있어야 훅을 **신뢰(trust)** 처리할 수 있어요. VS Code 확장에 들어 있는 `codex`로는 안 돼요.
+
+```bash
+brew install --cask codex
+```
+
+```bash
+codex
+```
+
+1. Codex 안에서 `/hooks`를 입력하고 Morphine 훅 두 개를 신뢰 처리하세요.
+2. 이걸 안 하면 Codex는 사용량 표시만 되고 멈추지 않아요.
+
+Homebrew가 없으면 `npm install -g @openai/codex`로 설치하세요 (Node 22 이상 필요).
+
+**Grok Build · Gemini CLI**
+
+사용량 API가 없거나 추정치뿐이라 래퍼로 실행하세요. `~/.zshrc`에 추가하면 돼요.
+
+```bash
+alias grok='morphine run --provider grok -- command grok'
+alias gemini='morphine run --provider gemini -- command gemini'
+```
+
+한도 메시지를 감지하면 31분마다(또는 화면에 나온 리셋 시각에) `continue`를 대신 입력해서 이어가요.
+
+### 사용법
+
+**메뉴바 읽는 법**
+
+- **주사기 + 배지 + 숫자:** 도구마다 하나씩 보여요 (**C** Claude · **O** Codex · **G** Gemini · **X** Grok). 숫자는 그 도구의 **남은 양**이에요.
+- **어떤 한도 기준인지:** 5시간 한도가 있으면 5시간 한도, 없으면 그다음 짧은 한도를 보여줘요.
+- **회색 + 시간:** 그 도구가 대기 중이에요. 시간은 충전 예상까지 남은 시간이에요.
+- **보이지 않는 도구:** 사용량을 읽을 수 없는 도구는 숨겨져요. 패널 아래 "연결 안 됨"에 이름이 나와요.
+- **갱신 간격:** 내 컴퓨터 기록은 2초마다, 서버 조회는 1분마다 갱신돼요.
+
+**메뉴바를 클릭하면 나오는 패널**
+
+- **도구별 막대:** 5시간·주간 남은 양과 리셋 시각을 보여줘요.
+- **대기 중인 도구:** 충전 예상 시각, 다음 확인 시각, **지금 바로 깨우기** 버튼이 나와요.
+- **대기 시작 기준:** 1 / 2 / 3 / 5 / 10% 중에서 고를 수 있어요.
+- **토글:** 대기 중 Mac 잠자기 방지, 메뉴바 % 표시, 모든 도구 표시(끄면 가장 급한 것만), 로그인 시 실행.
+
+**배지에 로고 넣기 (선택)**
+
+Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이미지를 아래처럼 넣으면, 1분 안에 글자 배지 대신 그 로고가 떠요. 배경이 투명한 PNG를 권장해요.
+
+- `~/.morphine/icons/claude.png`
+- `~/.morphine/icons/codex.png`
+- `~/.morphine/icons/gemini.png`
+- `~/.morphine/icons/grok.png`
+
+**제대로 멈추는지 시험하기**
+
+1. 지금 남은 양보다 높게 기준을 잠깐 올리세요. 예: Codex가 36% 남았다면 `morphine config set threshold_pct 40`.
+2. 에이전트에 파일 읽기나 명령 실행이 들어가는 작업을 시키면, 그 자리에서 멈추고 메뉴바가 회색으로 바뀌어야 해요.
+3. **먼저** `morphine config set threshold_pct 5`로 되돌리세요.
+4. 그다음 **지금 바로 깨우기**를 누르면 이어서 진행돼요.
+
+### 명령어
+
+| 하고 싶은 것 | 명령 |
+|---|---|
+| 모든 도구 사용량 보기 | `morphine status` |
+| 서버에서 새로 읽기 | `morphine status --refresh` |
+| 대기 기준 바꾸기 (남은 %, 기본 5) | `morphine config set threshold_pct 3` |
+| 대기 중 확인 간격 바꾸기 (분, 기본 31) | `morphine config set recheck_min 31` |
+| 리셋 시각 추가 확인 끄기 (31분 간격만) | `morphine config set recheck_at_reset false` |
+| 5시간 한도만 보고 멈추기 | `morphine config set windows '["5h"]'` |
+| 대기 중 잠자기 방지 끄기 | `morphine config set keep_awake false` |
+| 대기 중인 에이전트 모두 깨우기 | `morphine resume` |
+| `codex` 경로 직접 지정 | `morphine config set providers.codex.path /path/to/codex` |
+| 도구 훅 연결 | `morphine install claude codex gemini grok` |
+| 모든 훅 제거 (백업 남김) | `morphine uninstall` |
+| 현재 설정 보기 | `morphine config` |
+
+설정 파일은 `~/.morphine/config.json`, 대기 기록은 `~/.morphine/log.txt`에 있어요.
 
 ### 알아둘 점
 
 - **기준을 너무 낮추면 빠듯해요.** 훅은 도구 호출 직전에 확인하는데, 응답 한 번에 2~3%를 쓰는 경우도 있어서 기본값을 5%로 뒀어요.
-- **대기하는 동안 Mac이 잠들면 안 돼요.** 대기 중에는 `caffeinate -i`로 잠자기를 막아요. 다만 MacBook 덮개를 닫으면 잠들 수 있어요.
-- **재개 직후 첫 호출은 조금 비싸요.** 몇 시간 쉬면 프롬프트 캐시가 만료돼서, 재개 후 첫 호출에서 캐시를 다시 쓰기 때문이에요.
-- **비공식 경로는 깨질 수 있어요.** Codex app-server와 Claude OAuth usage API는 공식 문서에 없어요. 업데이트로 바뀌면 그 도구만 "알 수 없음"이 되고, 에이전트를 막지는 않아요.
-- **훅은 오래 대기해요.** 주간 한도를 기다릴 수 있도록 훅 timeout을 8일로 설정해요. 대기 중 에이전트 화면에는 훅이 실행 중인 것으로 보여요.
+- **기다리는 동안 에이전트 창을 닫지 마세요.** 닫으면 이어서 진행할 대상이 없어져요.
+- **Mac 잠자기는 Morphine이 막아줘요.** 대기 중에는 `caffeinate -i`로 잠자기를 막아요. 다만 MacBook 덮개를 닫으면 잠들 수 있어요.
+- **재개 직후 첫 호출은 조금 비싸요.** 오래 쉬면 프롬프트 캐시가 만료돼서, 재개 후 첫 호출에서 캐시를 다시 만들어요.
+- **비공식 경로는 깨질 수 있어요.** Codex app-server와 Anthropic 사용량 서버 조회는 공식 문서에 없는 방법이에요. 업데이트로 바뀌면 그 도구만 "알 수 없음"이 되고, 에이전트를 막지는 않아요.
+- **zsh에서 명령어 뒤 `# 설명`은 쓰지 마세요.** zsh 기본 설정에서는 주석으로 인식하지 않아서 오류가 나요.
 
 ---
 
 ## English
 
-**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and holds the agent there, re-reading usage every `recheck_min` minutes (default **31**, plus once at the reported reset time). **No model calls happen while it waits.** As soon as the window has refilled the hook returns and the agent continues. A macOS menu bar app shows one syringe per agent, injecting into a lettered badge (C Claude · O Codex · G Gemini · X Grok · A Antigravity), followed by the share of its shortest window (5-hour, else daily, else weekly) that is **left**, refreshed about every 2 seconds: blue while it runs, gray with a pause mark and a countdown while it is locked out, like the lockout interval on a morphine PCA pump.
+**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and holds it there. While it waits, Morphine re-reads usage every `recheck_min` minutes (default **31**, plus once at the reported reset time) and makes **no model calls**. As soon as the window has refilled, the hook returns and the agent carries on where it stopped.
 
-| Agent | Usage source | Pause mechanism | Pauses ahead of the limit |
-|---|---|---|---|
-| Claude Code | status line `rate_limits` → OAuth usage API | PreToolUse + UserPromptSubmit hooks | ✅ 5h & weekly |
-| Codex | `codex app-server` `account/rateLimits/read` → session logs | PreToolUse + UserPromptSubmit hooks | ✅ 5h & weekly |
-| Gemini CLI | estimated from session files | BeforeTool hook / PTY wrapper | ⚠️ estimate, display-only by default |
-| Grok Build | none published | PTY wrapper (detects limit message) | ❌ waits after the limit hits |
+**Menu bar.** Each agent gets a syringe injecting into a badge (C Claude · O Codex · G Gemini · X Grok, or your own logo in `~/.morphine/icons/<agent>.png`). The number next to it is how much of its shortest window (5-hour, else daily, else weekly) is **left**: blue while it runs, gray with a countdown while it is locked out. Agents without usage data are hidden. Local readings refresh every 2 s, server readings every 60 s.
+
+| Agent | Usage source | Auto-pause |
+|---|---|---|
+| Claude Code | status line `rate_limits` → Anthropic OAuth usage endpoint | ✅ 5h & weekly (Claude Code sessions) |
+| Codex | `codex app-server` `account/rateLimits/read` → session logs | ✅ 5h & weekly (CLI; desktop app / IDE extension unverified) |
+| Gemini CLI | estimated from session files | ⚠️ estimate, display-only by default |
+| Grok Build | none published | ❌ PTY wrapper reacts to the limit message, retries every 31 min |
 
 **Install**
 
 ```bash
-git clone https://github.com/Voyager466920/morphine.git && cd morphine && ./install.sh
+git clone https://github.com/Voyager466920/morphine.git
+cd morphine
+./install.sh
 ```
 
-Or as a Claude Code plugin: `/plugin marketplace add Voyager466920/morphine`, then `/plugin install morphine@morphine`, then `morphine install claude --no-hooks` for the status line feed. Codex users must trust the hooks once via `/hooks`.
+**Connect your agents**
+
+- **Claude:** install Claude Code (`curl -fsSL https://claude.ai/install.sh | bash`) and log in once with `claude`. Allow the Keychain prompt for "Claude Code-credentials". For auto-pause inside Claude Code, also run `morphine install claude`.
+- **Codex:** install the Codex CLI (`brew install --cask codex`), open `codex`, run `/hooks` and trust the two Morphine hooks.
+- **Grok / Gemini:** run them through the wrapper, e.g. `alias grok='morphine run --provider grok -- command grok'`.
+- **Claude Code plugin:** `/plugin marketplace add Voyager466920/morphine`, then `/plugin install morphine@morphine`, then `morphine install claude --no-hooks` for the status line feed.
+
+**Commands:** `morphine status`, `morphine config set threshold_pct 5`, `morphine config set recheck_min 31`, `morphine resume`, `morphine uninstall`. Settings live in `~/.morphine/config.json`.
 
 **Design rules**
 
 - **Unknown usage never blocks.** Adapter errors, timeouts and missing data always let the agent through.
 - **One adapter per provider.** Each lives in `morphine/adapters/` and only answers "how much is used, when does it reset". `morphine/guard.py` makes the decision.
-- **Shared state for the menu bar.** Lockouts are recorded in `~/.morphine/state.json` and read by the menu bar app. `morphine resume` (or the app's **Wake now** button) ends them early.
+- **Shared state for the menu bar.** Lockouts are recorded in `~/.morphine/state.json`. `morphine resume` (or the app's **Wake now** button) ends them early.
 - **No dependencies.** Standard-library Python 3.9+ and SwiftUI only.
 
 **Development**
 
 ```bash
-python3 -m unittest discover tests        # 26 tests, incl. an end-to-end PTY wrapper run
-app/scripts/bundle.sh                     # builds dist/Morphine.app
+python3 -m unittest discover tests
+app/scripts/bundle.sh
 ```
+
+The test suite has 31 tests, including an end-to-end PTY wrapper run. The second command builds `dist/Morphine.app`.
 
 ### License
 

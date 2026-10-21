@@ -23,13 +23,16 @@ final class Store: ObservableObject {
         refresh(network: false)
         refresh(network: true)
         timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.now = Date() }
+            guard let self else { return }
+            Task { @MainActor in self.now = Date() }
         })
         timers.append(Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh(network: false) }
+            guard let self else { return }
+            Task { @MainActor in self.refresh(network: false) }
         })
         timers.append(Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh(network: true) }
+            guard let self else { return }
+            Task { @MainActor in self.refresh(network: true) }
         })
     }
 
@@ -239,8 +242,9 @@ final class Store: ObservableObject {
                 "`morphine` CLI not found. Install it (see README) or set its path in Settings.",
                 "`morphine` CLI를 찾을 수 없어요. README대로 설치하거나 설정에서 경로를 지정하세요.")))
         }
-        var env = ProcessInfo.processInfo.environment
-        env["PATH"] = environmentPath()
+        var envVars = ProcessInfo.processInfo.environment
+        envVars["PATH"] = environmentPath()
+        let env = envVars  // immutable copy for the background queue
         return await withCheckedContinuation { cont in
             DispatchQueue.global(qos: .utility).async {
                 let proc = Process()

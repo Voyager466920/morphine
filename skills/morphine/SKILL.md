@@ -5,9 +5,10 @@ description: Set up, check or troubleshoot Morphine, the usage-cooldown guard th
 
 # Morphine
 
-Morphine does its waiting **outside the model**: a hook (or PTY wrapper) blocks the
-agent with `sleep` until the provider's reset time, so no tokens are spent while it
-waits. Never emulate this by polling usage from model turns — every check would cost
+Morphine does its waiting **outside the model**: a hook (or PTY wrapper) holds the
+agent, re-reads usage every `recheck_min` minutes (default 31, plus once at the
+reported reset time) and lets it continue once the window has refilled, so no
+tokens are spent while it waits. Never emulate this by polling usage from model turns — every check would cost
 a turn. Use the `morphine` CLI instead.
 
 ## Find the CLI
@@ -34,14 +35,16 @@ Settings live in `~/.morphine/config.json`; the lockout log is `~/.morphine/log.
 
 ## What each agent supports
 
-- **Claude Code** — pauses before the limit. Usage comes from the status line (`morphine install claude` adds it, wrapping any existing status line).
-- **Codex** — pauses before the limit. After installing, the user must open `codex`, run `/hooks`, and trust the two Morphine hooks once.
+- **Claude Code** — pauses before the limit. Usage comes from the status line (`morphine install claude` adds it) or, with only a Claude Code login, from the Anthropic usage endpoint via the Keychain item "Claude Code-credentials".
+- **Codex** — pauses before the limit. After installing, the user must open the Codex CLI (`brew install --cask codex`; the VS Code extension's bundled binary can't do this), run `/hooks`, and trust the two Morphine hooks once.
 - **Gemini CLI** — usage is only an estimate, so it does not pause by default; use the wrapper, or `morphine config set providers.gemini.lockout_on_estimate true`.
 - **Grok Build** — no usage data; use the wrapper (`alias grok='morphine run --provider grok -- command grok'`).
 
 ## Troubleshooting
 
 - `morphine status` shows an error for a provider → that provider is unknown, and Morphine never blocks on unknown usage.
-- Claude shows "no reading yet" → send one message in Claude Code so the status line runs.
+- Claude missing → install Claude Code, run `claude` once to log in, then `morphine status --refresh` in Terminal and click Always Allow on the Keychain prompt.
+- Codex says "codex binary not found" → `morphine config set providers.codex.path "$(which codex)"`.
+- Commands fail in zsh with `#` errors → don't paste trailing `# comments`.
 - A lockout seems stuck → check `~/.morphine/state.json`, then `morphine resume`.
 - While waiting, the agent's session is idle on purpose; the first call after resuming rebuilds the prompt cache, which costs a little more than usual.
