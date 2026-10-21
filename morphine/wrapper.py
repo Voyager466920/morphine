@@ -20,7 +20,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from morphine import state
-from morphine.guard import keep_awake, notify
+from morphine.guard import keep_awake, notify, recheck_sec
 from morphine.util import fmt_clock, fmt_duration, now, parse_ts
 
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]")
@@ -119,7 +119,7 @@ def run(cmd: List[str], provider: str, cfg: Dict[str, Any]) -> int:
 
     wcfg = cfg.get("wrapper", {})
     resume_text = str(wcfg.get("resume_text", "continue"))
-    fallback = 60.0 * float(wcfg.get("fallback_wait_min", 30))
+    recheck = recheck_sec(cfg)
     grace = float(cfg.get("resume_grace_sec", 45))
     detector = LimitDetector(wcfg.get("limit_patterns", []))
 
@@ -164,7 +164,10 @@ def run(cmd: List[str], provider: str, cfg: Dict[str, Any]) -> int:
                     if hit:
                         t = now()
                         reset = parse_reset(detector.buf, t)
-                        resume_at = (reset + grace) if reset else (t + fallback)
+                        # Probe again every `recheck_min` (31 min) or at the printed reset
+                        # time, whichever is sooner. A probe while still limited just
+                        # re-prints the limit message and re-arms this wait.
+                        resume_at = min(reset + grace, t + recheck) if reset else (t + recheck)
                         reason = f"limit message: “{hit.strip()[:60]}”"
                         wid = state.add_waiter(provider, resume_at, reason, window="wrapper",
                                                agent_pid=pid, cwd=os.getcwd())

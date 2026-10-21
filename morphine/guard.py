@@ -18,9 +18,15 @@ from morphine.util import fmt_clock, fmt_duration, now
 
 @dataclass
 class Decision:
-    resume_at: float
+    resume_at: float      # best estimate of when the window refills
     reason: str
     window: str
+    known_reset: bool = True   # False when the provider gave no reset time
+
+
+def recheck_sec(cfg: Dict[str, Any]) -> float:
+    """How often a sedated agent's usage is re-read (default 31 minutes)."""
+    return max(1.0, 60.0 * float(cfg.get("recheck_min", 31)))
 
 
 def check(provider: str, usage: Usage, cfg: Dict[str, Any], at: Optional[float] = None) -> Optional[Decision]:
@@ -43,13 +49,14 @@ def check(provider: str, usage: Usage, cfg: Dict[str, Any], at: Optional[float] 
     if not hits:
         return None
     resets = [r for _, r in hits if r]
+    known = len(resets) == len(hits)
     if resets:
         resume_at = max(resets) + float(cfg.get("resume_grace_sec", 45))
     else:
-        resume_at = at + 60.0 * float(cfg.get("unknown_reset_wait_min", 15))
+        resume_at = at + recheck_sec(cfg)
     reason = ", ".join(f"{w.name} {w.effective_used(at):.1f}% used" for w, _ in hits)
     worst = max(hits, key=lambda h: h[1] or 0)[0].name
-    return Decision(resume_at=resume_at, reason=reason, window=worst)
+    return Decision(resume_at=resume_at, reason=reason, window=worst, known_reset=known)
 
 
 # ------------------------------------------------------------ side effects
@@ -96,18 +103,29 @@ def _pid_alive(pid: int) -> bool:
         return True
 
 
+def _next_check(t: float, expected: float, known: bool, cfg: Dict[str, Any]) -> float:
+    """Every ``recheck_min`` minutes; also right at the reported reset time if that
+    comes sooner (``recheck_at_reset``), so a refill is never missed by ~30 min."""
+    nxt = t + recheck_sec(cfg)
+    if known and cfg.get("recheck_at_reset", True) and expected > t:
+        nxt = min(nxt, expected)
+    return nxt
+
+
 def wait_out(provider: str, decision: Decision, cfg: Dict[str, Any], meta: Optional[Dict[str, Any]] = None,
              sleep=time.sleep) -> str:
-    """Block (spending no tokens) until the window refills. Returns the outcome."""
+    """Sedate the agent (no tokens spent): re-read usage every ``recheck_min``
+    minutes (default 31) and return as soon as the window has refilled."""
     meta = meta or {}
     agent_pid = os.getppid()
     started = now()
-    resume_at = decision.resume_at
-    wid = state.add_waiter(provider, resume_at, decision.reason, window=decision.window,
-                           agent_pid=agent_pid, **meta)
+    expected, known = decision.resume_at, decision.known_reset
+    next_check = _next_check(started, expected, known, cfg)
+    wid = state.add_waiter(provider, expected if known else next_check, decision.reason,
+                           window=decision.window, next_check_at=next_check, agent_pid=agent_pid, **meta)
     caff = keep_awake(cfg)
-    notify("Morphine 💉", f"{provider}: {decision.reason}. Resuming at {fmt_clock(resume_at)} "
-                          f"(in {fmt_duration(resume_at - started)}).", cfg)
+    notify("Morphine 💉", f"{provider}: {decision.reason}. Checking every {int(recheck_sec(cfg) // 60)} min"
+                          + (f"; refill expected {fmt_clock(expected)}." if known else "."), cfg)
     old = {}
     for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
         try:
@@ -125,14 +143,24 @@ def wait_out(provider: str, decision: Decision, cfg: Dict[str, Any], meta: Optio
             if os.getppid() == 1 or not _pid_alive(agent_pid):
                 outcome = "abandoned"
                 break
-            if t >= resume_at:
+            if t >= next_check:
                 fresh = get_usage(provider, cfg, max_age=0)
-                again = check(provider, fresh, cfg, at=t) if fresh.ok else None
-                if again is None or again.resume_at <= t + 1:
-                    break
-                resume_at = again.resume_at  # provider moved the goalposts; keep waiting
-                state.update_waiter(wid, resume_at=resume_at, reason=again.reason)
-            sleep(min(poll, max(1.0, resume_at - t)))
+                if fresh.ok:
+                    again = check(provider, fresh, cfg, at=t)
+                    if again is None:
+                        break  # refilled
+                    expected, known = again.resume_at, again.known_reset
+                    reason = again.reason
+                else:
+                    # Can't read usage right now: keep waiting until the last known
+                    # reset time has passed, then let the agent go.
+                    if known and t >= expected:
+                        break
+                    reason = decision.reason
+                next_check = _next_check(t, expected, known, cfg)
+                state.update_waiter(wid, resume_at=expected if known else next_check,
+                                    next_check_at=next_check, reason=reason)
+            sleep(min(poll, max(1.0, next_check - t)))
     except _Interrupted:
         outcome = "interrupted"
     finally:

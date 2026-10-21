@@ -20,7 +20,7 @@
 
 - **바닥나기 전에 미리 멈춤:** 에이전트(Claude Code, Codex 등)가 일하는 도중 5시간 한도나 주간 한도의 남은 양이 **5% 아래로 떨어지면** (설정 가능), 다음 도구 호출 직전에 그 자리에서 멈춰요.
 - **대기 중 토큰 0:** 멈춘 동안에는 모델을 한 번도 부르지 않아요. hook 프로세스가 리셋 시각까지 `sleep`할 뿐이에요.
-- **리셋되면 자동 재개:** 한도가 다시 차면 그대로 이어서 작업해요.
+- **31분마다 확인 → 차면 자동 재개:** 멈춘 동안 31분마다 남은 양을 다시 확인하고 (리셋 시각을 알면 그 시각에도 한 번 더), 다시 차 있으면 그대로 이어서 작업해요.
 - **메뉴바 표시:** Mac 메뉴바의 주사기 아이콘에서 남은 양, 대기 중인지, 언제 재개하는지 보여줘요. 작동 중엔 **파란색**, 대기 중엔 **회색**이에요.
 
 이름은 병원의 **모르핀 PCA 펌프**에서 왔어요. 버튼을 누르면 한 번 투여되고, 그다음엔 **잠금 시간(lockout)** 동안 아무리 눌러도 안 나와요. 쿨타임이 끝나면 다시 투여돼요.
@@ -81,6 +81,8 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 원하면 직접 
 morphine status                           # 모든 도구의 사용량
 morphine config set threshold_pct 3       # 남은 양 3% 미만에서 대기 (기본 5)
 morphine config set windows '["5h"]'      # 5시간 한도만 감시 (기본: 5h, 7d, 1d)
+morphine config set recheck_min 31        # 대기 중 확인 간격 (분, 기본 31)
+morphine config set recheck_at_reset false   # 리셋 시각 추가 확인 끄기 (31분 간격만)
 morphine config set keep_awake false      # 대기 중 잠자기 방지 끄기
 morphine resume                           # 대기 중인 에이전트 모두 지금 깨우기
 morphine run --provider grok -- grok      # 사용량 API가 없는 CLI를 래퍼로 실행
@@ -99,7 +101,7 @@ morphine uninstall                        # 모든 훅 제거 (백업 남김)
 
 ## English
 
-**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and sleeps until the reset, so **no model calls happen while it waits**. Then the hook returns and the agent continues. A macOS menu bar app shows one syringe per agent, injecting into a lettered badge (C Claude · O Codex · G Gemini · X Grok · A Antigravity), followed by the share of its shortest window (5-hour, else daily, else weekly) that is **left**, refreshed about every 2 seconds: blue while it runs, gray with a pause mark and a countdown while it is locked out, like the lockout interval on a morphine PCA pump.
+**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and holds the agent there, re-reading usage every `recheck_min` minutes (default **31**, plus once at the reported reset time). **No model calls happen while it waits.** As soon as the window has refilled the hook returns and the agent continues. A macOS menu bar app shows one syringe per agent, injecting into a lettered badge (C Claude · O Codex · G Gemini · X Grok · A Antigravity), followed by the share of its shortest window (5-hour, else daily, else weekly) that is **left**, refreshed about every 2 seconds: blue while it runs, gray with a pause mark and a countdown while it is locked out, like the lockout interval on a morphine PCA pump.
 
 | Agent | Usage source | Pause mechanism | Pauses ahead of the limit |
 |---|---|---|---|

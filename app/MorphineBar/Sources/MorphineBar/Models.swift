@@ -44,6 +44,7 @@ struct Waiter: Decodable, Identifiable {
     var provider: String
     var startedAt: Double
     var resumeAt: Double
+    var nextCheckAt: Double?
     var reason: String?
     var cwd: String?
     var window: String?

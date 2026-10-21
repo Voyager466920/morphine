@@ -35,8 +35,12 @@ DEFAULTS: Dict[str, Any] = {
     "cache_ttl_sec": 60,
     # How often a waiting hook wakes up to check for "resume now" / dead parent.
     "poll_sec": 10,
-    # If a window is drained but has no reset time, re-check after this long.
-    "unknown_reset_wait_min": 15,
+    # While an agent is sedated, re-read its usage this often and resume as soon
+    # as the window has refilled.
+    "recheck_min": 31,
+    # Also re-check exactly at the provider's reported reset time when that
+    # comes before the next periodic check.
+    "recheck_at_reset": True,
     "providers": {
         "claude": {"enabled": True},
         "codex": {"enabled": True},
@@ -55,7 +59,6 @@ DEFAULTS: Dict[str, Any] = {
     # PTY wrapper (`morphine run`) for CLIs that expose no usage data.
     "wrapper": {
         "resume_text": "continue",
-        "fallback_wait_min": 30,
         "limit_patterns": [
             r"usage limit",
             r"rate[ -]?limit(ed)?\b.*(reached|exceeded|hit)",

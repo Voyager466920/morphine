@@ -120,7 +120,8 @@ class TestDecision(Env):
         cfg = config.load()
         t = 1_000_000.0
         d = guard.check("claude", Usage("claude", [Window("5h", 99.9, None)]), cfg, at=t)
-        self.assertAlmostEqual(d.resume_at, t + 60 * cfg["unknown_reset_wait_min"])
+        self.assertAlmostEqual(d.resume_at, t + 60 * 31)
+        self.assertFalse(d.known_reset)
 
     def test_estimates_do_not_lock_by_default(self):
         cfg = config.load()
@@ -168,6 +169,48 @@ class TestWait(Env):
             started = time.time()
             self.assertEqual(guard.wait_out("claude", d, cfg), "resumed")
         self.assertGreater(time.time() - started, 2.9)
+
+
+class TestRecheck(Env):
+    def test_rechecks_on_interval_until_refilled(self):
+        # 31 min scaled down to ~1.2 s; no reset time known, so only interval checks happen.
+        cfg = dict(config.load(), poll_sec=1, keep_awake=False, notify=False, recheck_min=0.02)
+        t = time.time()
+        d = guard.Decision(resume_at=t + 1.2, reason="5h 99% used", window="5h", known_reset=False)
+        readings = iter([Usage("claude", [Window("5h", 99.0, None)]),     # still drained
+                         Usage("claude", [Window("5h", 3.0, None)])])     # refilled
+        calls = []
+
+        def fake_get(*a, **k):
+            calls.append(time.time() - t)
+            return next(readings)
+
+        with mock.patch("morphine.guard.get_usage", side_effect=fake_get):
+            self.assertEqual(guard.wait_out("claude", d, cfg), "resumed")
+        self.assertEqual(len(calls), 2)
+        self.assertGreater(calls[1] - calls[0], 1.0)  # second check one interval later
+
+    def test_first_check_waits_full_interval_not_reset_when_disabled(self):
+        cfg = dict(config.load(), keep_awake=False, notify=False, recheck_min=31, recheck_at_reset=False)
+        t = 1_000_000.0
+        self.assertAlmostEqual(guard._next_check(t, t + 60, True, cfg), t + 31 * 60)
+        cfg["recheck_at_reset"] = True
+        self.assertAlmostEqual(guard._next_check(t, t + 60, True, cfg), t + 60)
+
+    def test_read_error_does_not_resume_before_known_reset(self):
+        cfg = dict(config.load(), poll_sec=1, keep_awake=False, notify=False, recheck_min=0.02)
+        t = time.time()
+        d = guard.Decision(resume_at=t + 2.5, reason="x", window="5h", known_reset=True)
+        n = []
+
+        def fake_get(*a, **k):
+            n.append(1)
+            return Usage("claude", error="offline")
+
+        with mock.patch("morphine.guard.get_usage", side_effect=fake_get):
+            started = time.time()
+            self.assertEqual(guard.wait_out("claude", d, cfg), "resumed")
+        self.assertGreater(time.time() - started, 2.0)  # held until the known reset passed
 
 
 class TestAdapters(Env):

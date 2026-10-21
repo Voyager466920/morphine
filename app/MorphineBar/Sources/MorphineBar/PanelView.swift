@@ -59,9 +59,7 @@ struct PanelView: View {
                         Text(Fmt.duration(left)).font(.callout.monospacedDigit())
                     }
                     ProgressView(value: min(1, (total - left) / total))
-                    Text(L.t("resumes \(Fmt.clock(w.resumeAt))", "\(Fmt.clock(w.resumeAt))에 재개")
-                         + (w.reason.map { " · \($0)" } ?? "")
-                         + (w.cwd.map { " · \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? ""))
+                    Text(lockoutDetail(w))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
@@ -73,6 +71,16 @@ struct PanelView: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.12)))
+    }
+
+    private func lockoutDetail(_ w: Waiter) -> String {
+        var parts: [String] = [L.t("refill ~\(Fmt.clock(w.resumeAt))", "충전 예상 \(Fmt.clock(w.resumeAt))")]
+        if let n = w.nextCheckAt {
+            parts.append(L.t("next check \(Fmt.clock(n))", "다음 확인 \(Fmt.clock(n))"))
+        }
+        if let r = w.reason { parts.append(r) }
+        if let c = w.cwd { parts.append(URL(fileURLWithPath: c).lastPathComponent) }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: providers
