@@ -45,19 +45,33 @@ def usage_from_rate_limits(rl: Dict[str, Any], source: str) -> Usage:
                  error=None if wins else "no rate_limits windows")
 
 
+_last_token_problem = ""
+
+
 def _read_token() -> Optional[str]:
+    global _last_token_problem
     env = os.environ.get("MORPHINE_CLAUDE_OAUTH_TOKEN")
     if env:
         return env
     blob = None
     if platform.system() == "Darwin":
         try:
+            # The first read pops a Keychain dialog ("Always Allow" fixes it for good),
+            # so give the person time to answer.
             out = subprocess.run(
                 ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=45,
             )
             if out.returncode == 0 and out.stdout.strip():
                 blob = json.loads(out.stdout.strip())
+            elif out.returncode == 44:
+                _last_token_problem = "no Claude Code login in Keychain (run `claude` once and log in)"
+            else:
+                _last_token_problem = ("Keychain access to 'Claude Code-credentials' was not allowed — "
+                                       "run `morphine status --refresh` in Terminal and click Always Allow")
+        except subprocess.TimeoutExpired:
+            _last_token_problem = ("Keychain prompt not answered — run `morphine status --refresh` "
+                                   "in Terminal and click Always Allow")
         except (OSError, ValueError, subprocess.SubprocessError):
             blob = None
     if blob is None:
@@ -73,7 +87,8 @@ def _read_token() -> Optional[str]:
 def fetch_oauth(timeout: float = 8.0) -> Usage:
     token = _read_token()
     if not token:
-        return Usage(provider="claude", source="oauth", error="no Claude OAuth credentials found")
+        return Usage(provider="claude", source="oauth",
+                     error=_last_token_problem or "no Claude OAuth credentials found")
     req = urllib.request.Request(
         USAGE_URL,
         headers={
@@ -116,6 +131,4 @@ class ClaudeAdapter(Adapter):
             if stale.ok:
                 stale.note = "stale status line reading"
                 return stale
-        if u.error and "credentials" in u.error:
-            u.note = "Run `morphine install claude` so the status line feeds usage."
         return u
