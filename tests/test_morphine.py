@@ -95,7 +95,7 @@ class TestDecision(Env):
     def test_threshold(self):
         cfg = config.load()
         t = 1_000_000.0
-        ok = Usage("claude", [Window("5h", 97.0, t + 600)])
+        ok = Usage("claude", [Window("5h", 94.0, t + 600)])
         self.assertIsNone(guard.check("claude", ok, cfg, at=t))
         low = Usage("claude", [Window("5h", 98.5, t + 600), Window("7d", 50.0, t + 9e5)])
         d = guard.check("claude", low, cfg, at=t)
@@ -261,7 +261,7 @@ class TestHookCLI(Env):
     def test_statusline_wrap_and_cache(self):
         sl = {"rate_limits": {"five_hour": {"used_percentage": 42, "resets_at": time.time() + 3600}}}
         r = self._run(["statusline", "--wrap", "echo theirs"], json.dumps(sl))
-        self.assertEqual(r.stdout.strip(), "theirs  │  💉 5h 42%")
+        self.assertEqual(r.stdout.strip(), "theirs  │  💉 5h 58% left")
         r = self._run(["status", "--json", "--cached"])
         claude = next(p for p in json.loads(r.stdout)["providers"] if p["id"] == "claude")
         self.assertEqual(claude["windows"][0]["used_pct"], 42)

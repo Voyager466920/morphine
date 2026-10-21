@@ -157,7 +157,7 @@ def cmd_statusline(args: argparse.Namespace) -> int:
             for w in u.windows:
                 used = w.effective_used()
                 if used is not None:
-                    parts.append(f"{w.name} {used:.0f}%")
+                    parts.append(f"{w.name} {max(0.0, 100 - used):.0f}% left")
             if parts:
                 ours = "💉 " + " · ".join(parts)
     locked = [w for w in state.waiting() if w.get("provider") == "claude"]

@@ -26,7 +26,7 @@ class Decision:
 def check(provider: str, usage: Usage, cfg: Dict[str, Any], at: Optional[float] = None) -> Optional[Decision]:
     """Return a Decision if any watched window has less than ``threshold_pct`` left."""
     at = now() if at is None else at
-    thr = float(cfg.get("threshold_pct", 2.0))
+    thr = float(cfg.get("threshold_pct", 5.0))
     watched = set(cfg.get("windows", ["5h", "7d", "1d"]))
     allow_estimates = bool(provider_cfg(cfg, provider).get("lockout_on_estimate", False))
     hits = []

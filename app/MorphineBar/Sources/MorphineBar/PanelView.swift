@@ -81,7 +81,8 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(store.snapshot?.providers ?? []) { p in
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+                    HStack(spacing: 6) {
+                        badge(p.id)
                         Text(p.name).font(.callout.weight(.medium))
                         if p.preemptive == false {
                             Text(L.t("wrapper", "래퍼")).font(.caption2)
@@ -111,8 +112,8 @@ struct PanelView: View {
         let used = w.used(at: store.now)
         return HStack(spacing: 8) {
             Text(w.name).font(.caption.monospacedDigit()).frame(width: 22, alignment: .leading)
-            ProgressView(value: (used ?? 0) / 100).tint(color(for: used))
-            Text(used.map { "\(w.estimated == true ? "~" : "")\(Int($0.rounded()))%" } ?? "?")
+            ProgressView(value: max(0, 100 - (used ?? 100)) / 100).tint(color(for: used))
+            Text(used.map { "\(w.estimated == true ? "~" : "")\(Int(max(0, 100 - $0).rounded()))%" } ?? "?")
                 .font(.caption.monospacedDigit()).frame(width: 40, alignment: .trailing)
             Text(resetText(w)).font(.caption2).foregroundStyle(.secondary).frame(width: 70, alignment: .trailing)
         }
@@ -126,8 +127,18 @@ struct PanelView: View {
     private func color(for used: Double?) -> Color {
         guard let u = used else { return .gray }
         if 100 - u < store.threshold { return .red }
-        if u >= 85 { return .orange }
-        return .green
+        if 100 - u < 15 { return .orange }
+        return .blue
+    }
+
+    /// Same lettered badge the menu bar uses (C Claude · O Codex · G Gemini · X Grok · A Antigravity).
+    private func badge(_ id: String) -> some View {
+        let locked = store.waiting.contains { $0.provider == id }
+        return Text(SyringeIcon.letter(for: id))
+            .font(.system(size: 9, weight: .heavy))
+            .foregroundStyle(.white)
+            .frame(width: 15, height: 15)
+            .background(Circle().fill(locked ? Color.gray : Color.blue))
     }
 
     // MARK: controls
@@ -145,7 +156,9 @@ struct PanelView: View {
             }
             Toggle(L.t("Keep Mac awake while waiting", "대기 중 Mac 잠자기 방지"),
                    isOn: Binding(get: { store.snapshot?.keepAwake ?? true }, set: { store.setKeepAwake($0) }))
-            Toggle(L.t("Show % in menu bar", "메뉴바에 % 표시"), isOn: $store.showPercent)
+            Toggle(L.t("Show remaining % in menu bar", "메뉴바에 남은 % 표시"), isOn: $store.showPercent)
+            Toggle(L.t("Show every agent in menu bar", "메뉴바에 모든 도구 표시 (끄면 가장 급한 것만)"),
+                   isOn: $store.showAllAgents)
             Toggle(L.t("Launch at login", "로그인 시 실행"),
                    isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
             HStack {

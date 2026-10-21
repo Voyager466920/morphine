@@ -23,7 +23,7 @@ or the plugin copy: `ls ~/.claude/plugins/cache/*/morphine/*/bin/morphine`.
 | See usage for every agent | `morphine status` (`--json` for machine output) |
 | Wire up agents | `morphine install claude codex gemini antigravity grok` (or `all`) |
 | Installed as a Claude Code plugin | `morphine install claude --no-hooks` (status line only; the plugin already ships the hooks) |
-| Change the trigger | `morphine config set threshold_pct 5` (remaining %, default 2) |
+| Change the trigger | `morphine config set threshold_pct 3` (remaining %, default 5) |
 | Only watch the 5-hour window | `morphine config set windows '["5h"]'` |
 | End a lockout now | `morphine resume` |
 | Guard a CLI with no usage API | `morphine run --provider grok -- grok` |

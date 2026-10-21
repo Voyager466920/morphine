@@ -27,12 +27,7 @@ struct MenuLabel: View {
     @ObservedObject var store: Store
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(nsImage: store.icon).renderingMode(.original)
-            let title = store.menuTitle
-            if !title.isEmpty {
-                Text(title).monospacedDigit()
-            }
-        }
+        // One pre-rendered image keeps the per-agent colours intact in the menu bar.
+        Image(nsImage: store.labelImage).renderingMode(.original)
     }
 }

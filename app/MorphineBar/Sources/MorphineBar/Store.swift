@@ -38,7 +38,53 @@ final class Store: ObservableObject {
     var waiting: [Waiter] { snapshot?.waiting ?? [] }
     var isLocked: Bool { !waiting.isEmpty }
     var nextResume: Waiter? { waiting.min { $0.resumeAt < $1.resumeAt } }
-    var threshold: Double { snapshot?.thresholdPct ?? 2 }
+    var threshold: Double { snapshot?.thresholdPct ?? 5 }
+
+    /// Show every agent in the menu bar (true) or only the most urgent one.
+    @Published var showAllAgents: Bool = UserDefaults.standard.object(forKey: "showAllAgents") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(showAllAgents, forKey: "showAllAgents") }
+    }
+
+    /// Smallest remaining share (0...100) among a provider's watched windows.
+    func remaining(of p: Provider) -> (pct: Double, estimated: Bool)? {
+        let watched = Set(snapshot?.windows ?? ["5h", "7d", "1d"])
+        var best: (Double, Bool)?
+        for w in p.windows where watched.contains(w.name) {
+            guard let u = w.used(at: now) else { continue }
+            let left = max(0, 100 - u)
+            if best == nil || left < best!.0 { best = (left, w.estimated ?? false) }
+        }
+        return best.map { (pct: $0.0, estimated: $0.1) }
+    }
+
+    /// One syringe per agent: locked agents show a countdown, others what's left.
+    var labelItems: [SyringeIcon.Item] {
+        guard let snap = snapshot else { return [] }
+        var items: [(SyringeIcon.Item, Double)] = []  // (item, urgency: lower = more urgent)
+        var seen = Set<String>()
+        for p in snap.providers {
+            seen.insert(p.id)
+            let letter = SyringeIcon.letter(for: p.id)
+            if let w = waiting.filter({ $0.provider == p.id }).min(by: { $0.resumeAt < $1.resumeAt }) {
+                let left = w.resumeAt - now.timeIntervalSince1970
+                items.append((.init(letter: letter, remaining: nil, locked: true, text: Fmt.duration(left)), -1))
+            } else if let r = remaining(of: p) {
+                let text = showPercent ? "\(r.estimated ? "~" : "")\(Int(r.pct.rounded()))%" : ""
+                items.append((.init(letter: letter, remaining: r.pct / 100, locked: false, text: text), r.pct))
+            }
+        }
+        // Wrapper sessions with a custom --provider label.
+        for w in waiting where !seen.contains(w.provider) {
+            seen.insert(w.provider)
+            let left = w.resumeAt - now.timeIntervalSince1970
+            items.append((.init(letter: SyringeIcon.letter(for: w.provider), remaining: nil, locked: true,
+                                text: Fmt.duration(left)), -1))
+        }
+        if !showAllAgents, let top = items.min(by: { $0.1 < $1.1 }) { return [top.0] }
+        return items.map { $0.0 }
+    }
+
+    var labelImage: NSImage { SyringeIcon.label(labelItems) }
 
     /// The most-drained watched, non-estimated window across providers.
     var worst: (provider: Provider, window: UsageWindow, used: Double)? {
@@ -52,12 +98,6 @@ final class Store: ObservableObject {
             }
         }
         return best.map { (provider: $0.0, window: $0.1, used: $0.2) }
-    }
-
-    var menuTitle: String {
-        if let w = nextResume { return Fmt.duration(w.resumeAt - now.timeIntervalSince1970) }
-        if showPercent, let worst = worst { return "\(Int(worst.used.rounded()))%" }
-        return ""
     }
 
     var icon: NSImage {

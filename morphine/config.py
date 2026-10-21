@@ -21,7 +21,7 @@ from morphine.util import read_json, write_json_atomic
 
 DEFAULTS: Dict[str, Any] = {
     # Lock the agent out when the *remaining* share of a window drops below this.
-    "threshold_pct": 2.0,
+    "threshold_pct": 5.0,
     # Which windows may trigger a lockout. "5h" = session window, "7d" = weekly,
     # "1d" = daily request quota (Gemini CLI estimate).
     "windows": ["5h", "7d", "1d"],
