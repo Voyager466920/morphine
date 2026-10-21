@@ -194,6 +194,10 @@ class CodexAdapter(Adapter):
     id = "codex"
     name = "Codex"
 
+    def fetch_local(self, cfg: Dict[str, Any]) -> Optional[Usage]:
+        u = fetch_from_sessions()
+        return u if u.ok else None
+
     def fetch(self, cfg: Dict[str, Any]) -> Usage:
         live = fetch_from_app_server()
         if live.ok:

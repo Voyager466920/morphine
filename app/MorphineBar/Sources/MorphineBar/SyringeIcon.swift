@@ -2,7 +2,7 @@ import AppKit
 
 /// Menu bar art. Each agent gets a syringe "injecting" into a lettered badge
 /// (C = Claude, O = Codex/OpenAI, G = Gemini, X = Grok/xAI, A = Antigravity),
-/// followed by how much of its usage window is LEFT. Blue = running,
+/// followed by how much of its SHORTEST usage window (5h, else daily, else weekly) is LEFT. Blue = running,
 /// gray with a pause mark = waiting out a cooldown (countdown instead of %).
 enum SyringeIcon {
     /// High-contrast state colours, picked for the menu bar's current appearance

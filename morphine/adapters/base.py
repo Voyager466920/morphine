@@ -70,6 +70,18 @@ class Usage:
         )
 
 
+# Shorter windows first: the display rule is "show the 5-hour window if there is
+# one, otherwise the next-shortest limit" (daily, then weekly).
+WINDOW_ORDER = {"5h": 0, "1d": 1, "7d": 2}
+
+
+def shortest_window(windows: List[Window], at: Optional[float] = None) -> Optional[Window]:
+    known = [w for w in windows if w.effective_used(at) is not None]
+    if not known:
+        return None
+    return min(known, key=lambda w: WINDOW_ORDER.get(w.name, 99))
+
+
 class Adapter:
     id: str = ""
     name: str = ""
@@ -78,3 +90,8 @@ class Adapter:
 
     def fetch(self, cfg: Dict[str, Any]) -> Usage:  # pragma: no cover - interface
         raise NotImplementedError
+
+    def fetch_local(self, cfg: Dict[str, Any]) -> Optional[Usage]:
+        """A cheap, network-free reading (local files / localhost) for frequent
+        polling by the menu bar. None when the provider has no such source."""
+        return None

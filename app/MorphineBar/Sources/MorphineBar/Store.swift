@@ -25,7 +25,7 @@ final class Store: ObservableObject {
         timers.append(Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.now = Date() }
         })
-        timers.append(Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+        timers.append(Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh(network: false) }
         })
         timers.append(Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -45,16 +45,14 @@ final class Store: ObservableObject {
         didSet { UserDefaults.standard.set(showAllAgents, forKey: "showAllAgents") }
     }
 
-    /// Smallest remaining share (0...100) among a provider's watched windows.
+    /// What the menu bar shows for a provider: the SHORTEST window it has —
+    /// the 5-hour window when present, otherwise the daily, otherwise the weekly.
     func remaining(of p: Provider) -> (pct: Double, estimated: Bool)? {
-        let watched = Set(snapshot?.windows ?? ["5h", "7d", "1d"])
-        var best: (Double, Bool)?
-        for w in p.windows where watched.contains(w.name) {
-            guard let u = w.used(at: now) else { continue }
-            let left = max(0, 100 - u)
-            if best == nil || left < best!.0 { best = (left, w.estimated ?? false) }
-        }
-        return best.map { (pct: $0.0, estimated: $0.1) }
+        let order = ["5h": 0, "1d": 1, "7d": 2]
+        let known = p.windows.filter { $0.used(at: now) != nil }
+        guard let w = known.min(by: { (order[$0.name] ?? 99) < (order[$1.name] ?? 99) }),
+              let u = w.used(at: now) else { return nil }
+        return (pct: max(0, 100 - u), estimated: w.estimated ?? false)
     }
 
     /// One syringe per agent: locked agents show a countdown, others what's left.

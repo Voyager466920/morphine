@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from morphine import __version__, config, state
 from morphine.adapters import ADAPTERS, Usage, cached_usage, enabled_providers, get_usage
+from morphine.adapters.base import shortest_window
 from morphine.adapters.claude import statusline_cache_path, usage_from_rate_limits
 from morphine.util import fmt_clock, fmt_duration, now, read_json, write_json_atomic
 
@@ -20,20 +21,21 @@ ALLOW_OUTPUT = {"claude": "", "codex": "", "grok": "", "gemini": "{}"}
 
 # ------------------------------------------------------------------ status
 
-def _claude_cached() -> Optional[Usage]:
-    a = cached_usage("claude")
-    sl = read_json(statusline_cache_path())
-    b = Usage.from_dict(sl) if isinstance(sl, dict) else None
-    cands = [u for u in (a, b) if u is not None]
-    return max(cands, key=lambda u: u.fetched_at) if cands else None
-
-
 def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
     t = now()
     providers = []
     for pid in enabled_providers(cfg):
         if cached_only:
-            u = _claude_cached() if pid == "claude" else cached_usage(pid)
+            # Fast path for the menu bar (polled every couple of seconds): the
+            # newest of the last full reading and a cheap local one.
+            cands = [cached_usage(pid)]
+            try:
+                cands.append(ADAPTERS[pid].fetch_local(cfg))
+            except Exception:  # noqa: BLE001
+                pass
+            cands = [c for c in cands if c is not None]
+            good = [c for c in cands if c.ok]
+            u = max(good, key=lambda c: c.fetched_at) if good else (cands[0] if cands else None)
             u = u or Usage(provider=pid, error="no reading yet")
         else:
             u = get_usage(pid, cfg)
@@ -45,6 +47,8 @@ def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
             win = next(x for x in u.windows if x.name == w["name"])
             w["used_now"] = win.effective_used(t)
             w["remaining"] = win.remaining(t)
+        disp = shortest_window(u.windows, t)
+        d["display_window"] = disp.name if disp else None
         providers.append(d)
     return {
         "version": __version__,
@@ -154,10 +158,9 @@ def cmd_statusline(args: argparse.Namespace) -> int:
             # Also refresh the main cache so hooks see this reading immediately.
             write_json_atomic(config.home() / "cache" / "claude.json", dict(d, checked_at=now()))
             parts = []
-            for w in u.windows:
-                used = w.effective_used()
-                if used is not None:
-                    parts.append(f"{w.name} {max(0.0, 100 - used):.0f}% left")
+            w = shortest_window(u.windows)
+            if w is not None:
+                parts.append(f"{w.name} {max(0.0, 100 - w.effective_used()):.0f}% left")
             if parts:
                 ours = "💉 " + " · ".join(parts)
     locked = [w for w in state.waiting() if w.get("provider") == "claude"]

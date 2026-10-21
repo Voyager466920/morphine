@@ -84,6 +84,15 @@ class AntigravityAdapter(Adapter):
     id = "antigravity"
     name = "Antigravity"
 
+    def fetch_local(self, cfg: Dict[str, Any]):
+        # localhost only; skip the port scan entirely when agy isn't running.
+        try:
+            if subprocess.run(["pgrep", "-if", "agy|antigravity"], capture_output=True, timeout=2).returncode != 0:
+                return None
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return self.fetch(cfg)
+
     def fetch(self, cfg: Dict[str, Any]) -> Usage:
         ports = _listening_ports()
         if not ports:

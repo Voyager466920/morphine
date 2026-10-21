@@ -19,6 +19,7 @@ struct Provider: Decodable, Identifiable {
     var note: String?
     var source: String?
     var preemptive: Bool?
+    var displayWindow: String?
     var windows: [UsageWindow]
 }
 

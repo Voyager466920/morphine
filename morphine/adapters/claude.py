@@ -95,6 +95,13 @@ class ClaudeAdapter(Adapter):
     id = "claude"
     name = "Claude Code"
 
+    def fetch_local(self, cfg: Dict[str, Any]) -> Optional[Usage]:
+        cached = read_json(statusline_cache_path())
+        if isinstance(cached, dict):
+            u = Usage.from_dict(cached)
+            return u if u.ok else None
+        return None
+
     def fetch(self, cfg: Dict[str, Any]) -> Usage:
         cached = read_json(statusline_cache_path())
         if isinstance(cached, dict) and now() - float(cached.get("fetched_at", 0)) < STATUSLINE_STALE_SEC:

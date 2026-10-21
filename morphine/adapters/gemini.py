@@ -62,6 +62,9 @@ class GeminiAdapter(Adapter):
     id = "gemini"
     name = "Gemini CLI"
 
+    def fetch_local(self, cfg: Dict[str, Any]) -> Usage:
+        return self.fetch(cfg)  # already purely local
+
     def fetch(self, cfg: Dict[str, Any]) -> Usage:
         pc = provider_cfg(cfg, "gemini")
         budget = max(1, int(pc.get("daily_requests", 1000)))

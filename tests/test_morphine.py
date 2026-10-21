@@ -236,6 +236,29 @@ class TestAdapters(Env):
         self.assertFalse(u.ok)
 
 
+class TestDisplayRule(Env):
+    def test_shortest_window_wins(self):
+        from morphine.adapters.base import shortest_window
+        t = 1_000_000.0
+        both = [Window("7d", 99.0, t + 9e5), Window("5h", 10.0, t + 600)]
+        self.assertEqual(shortest_window(both, t).name, "5h")
+        only_week = [Window("7d", 40.0, t + 9e5)]
+        self.assertEqual(shortest_window(only_week, t).name, "7d")
+        self.assertIsNone(shortest_window([Window("5h", None, None)], t))
+
+    def test_cached_status_prefers_fresher_local_reading(self):
+        from morphine import cli
+        from morphine.util import write_json_atomic
+        stale = Usage("codex", [Window("5h", 10.0, time.time() + 3600)], source="app-server", fetched_at=time.time() - 300)
+        write_json_atomic(config.home() / "cache" / "codex.json", stale.to_dict())
+        fresh = Usage("codex", [Window("5h", 55.0, time.time() + 3600)], source="sessions", fetched_at=time.time())
+        with mock.patch.object(type(cli.ADAPTERS["codex"]), "fetch_local", return_value=fresh):
+            data = cli.collect(config.load(), cached_only=True)
+        codex = next(p for p in data["providers"] if p["id"] == "codex")
+        self.assertEqual(codex["windows"][0]["used_pct"], 55.0)
+        self.assertEqual(codex["display_window"], "5h")
+
+
 class TestHookCLI(Env):
     def _run(self, args, stdin="", extra_env=None):
         env = dict(os.environ, PYTHONPATH=str(ROOT), **(extra_env or {}))

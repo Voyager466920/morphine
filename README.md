@@ -27,7 +27,7 @@
 
 <p align="center"><img src="app/Resources/menubar-preview.png" width="420" alt="메뉴바 아이콘 상태"></p>
 
-도구마다 주사기 하나가 글자 배지에 "주입"돼요: **C** Claude · **O** Codex · **G** Gemini · **X** Grok · **A** Antigravity. 숫자 = 그 도구의 **남은** 사용량 (5시간·주간 중 더 적게 남은 쪽) · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
+도구마다 주사기 하나가 글자 배지에 "주입"돼요: **C** Claude · **O** Codex · **G** Gemini · **X** Grok · **A** Antigravity. 숫자 = 그 도구의 **남은** 사용량 (5시간 한도 기준, 5시간 한도가 없는 도구는 그다음 짧은 한도) · 약 2초마다 갱신 · 파란색 = 작동 중 · 회색 ⏸ = 대기 중 (숫자는 리셋까지 남은 시간)
 
 ### 지원 범위
 
@@ -99,7 +99,7 @@ morphine uninstall                        # 모든 훅 제거 (백업 남김)
 
 ## English
 
-**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and sleeps until the reset, so **no model calls happen while it waits**. Then the hook returns and the agent continues. A macOS menu bar app shows one syringe per agent, injecting into a lettered badge (C Claude · O Codex · G Gemini · X Grok · A Antigravity), followed by the share of the window that is **left**: blue while it runs, gray with a pause mark and a countdown while it is locked out, like the lockout interval on a morphine PCA pump.
+**What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and sleeps until the reset, so **no model calls happen while it waits**. Then the hook returns and the agent continues. A macOS menu bar app shows one syringe per agent, injecting into a lettered badge (C Claude · O Codex · G Gemini · X Grok · A Antigravity), followed by the share of its shortest window (5-hour, else daily, else weekly) that is **left**, refreshed about every 2 seconds: blue while it runs, gray with a pause mark and a countdown while it is locked out, like the lockout interval on a morphine PCA pump.
 
 | Agent | Usage source | Pause mechanism | Pauses ahead of the limit |
 |---|---|---|---|
