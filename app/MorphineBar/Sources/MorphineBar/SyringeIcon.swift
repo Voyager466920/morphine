@@ -5,8 +5,18 @@ import AppKit
 /// followed by how much of its usage window is LEFT. Blue = running,
 /// gray with a pause mark = waiting out a cooldown (countdown instead of %).
 enum SyringeIcon {
-    static let running = NSColor.systemBlue
-    static let waiting = NSColor.systemGray
+    /// High-contrast state colours, picked for the menu bar's current appearance
+    /// (evaluated at draw time, so they follow light/dark wallpaper changes).
+    static var isDark: Bool {
+        NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+    static var running: NSColor {
+        isDark ? NSColor(srgbRed: 0.42, green: 0.74, blue: 1.0, alpha: 1)   // bright sky blue
+               : NSColor(srgbRed: 0.0, green: 0.40, blue: 0.92, alpha: 1)   // deep blue
+    }
+    static var waiting: NSColor {
+        isDark ? NSColor(white: 0.70, alpha: 1) : NSColor(white: 0.40, alpha: 1)
+    }
 
     struct Item: Equatable {
         var provider: String
@@ -59,17 +69,17 @@ enum SyringeIcon {
 
     // MARK: - Menu bar label
 
-    private static let height: CGFloat = 18
-    private static let scale: CGFloat = 0.8
-    private static let badgeRadius: CGFloat = 4.9
-    private static let gap: CGFloat = 7
+    private static let height: CGFloat = 22
+    private static let scale: CGFloat = 1.0
+    private static let badgeRadius: CGFloat = 6.5
+    private static let gap: CGFloat = 9
 
     private static func textAttrs(_ color: NSColor) -> [NSAttributedString.Key: Any] {
-        [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold), .foregroundColor: color]
+        [.font: NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .bold), .foregroundColor: color]
     }
 
     /// Side of the box a user-supplied logo fills (nearly the full bar height).
-    private static let logoSide: CGFloat = 14
+    private static let logoSide: CGFloat = 19
 
     private static func badgeWidth(_ item: Item) -> CGFloat {
         customIcon(for: item.provider) != nil ? logoSide : badgeRadius * 2
@@ -101,7 +111,7 @@ enum SyringeIcon {
                 let color = item.locked ? waiting : running
                 color.set()
 
-                // Syringe, scaled into the 18pt-tall bar and vertically centred.
+                // Syringe, scaled into the bar and vertically centred.
                 NSGraphicsContext.saveGraphicsState()
                 let t = NSAffineTransform()
                 t.translateX(by: x, yBy: (height - 16 * scale) / 2)
@@ -124,7 +134,7 @@ enum SyringeIcon {
                                        width: badgeRadius * 2, height: badgeRadius * 2)
                     NSBezierPath(ovalIn: badge).fill()
                     let letterAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont.systemFont(ofSize: 7, weight: .heavy), .foregroundColor: NSColor.white,
+                        .font: NSFont.systemFont(ofSize: 9, weight: .heavy), .foregroundColor: NSColor.white,
                     ]
                     let ls = (item.letter as NSString).size(withAttributes: letterAttrs)
                     (item.letter as NSString).draw(at: NSPoint(x: cx - ls.width / 2, y: height / 2 - ls.height / 2 + 0.2),
