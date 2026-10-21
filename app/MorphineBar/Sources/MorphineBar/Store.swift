@@ -44,6 +44,16 @@ final class Store: ObservableObject {
     var threshold: Double { snapshot?.thresholdPct ?? 5 }
 
     /// Show every agent in the menu bar (true) or only the most urgent one.
+    /// Menu bar colour while running (see RunColor).
+    @Published var runColor: RunColor = RunColor.current {
+        didSet { UserDefaults.standard.set(runColor.rawValue, forKey: "runColor") }
+    }
+    @Published var customRunColor: Color = Color(nsColor: RunColor.customColor) {
+        didSet { RunColor.customColor = NSColor(customRunColor) }
+    }
+    /// SwiftUI colour for the panel, matching the menu bar.
+    var runningColor: Color { Color(nsColor: SyringeIcon.running) }
+
     @Published var showAllAgents: Bool = UserDefaults.standard.object(forKey: "showAllAgents") as? Bool ?? true {
         didSet { UserDefaults.standard.set(showAllAgents, forKey: "showAllAgents") }
     }

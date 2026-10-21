@@ -144,7 +144,7 @@ struct PanelView: View {
         guard let u = used else { return .gray }
         if 100 - u < store.threshold { return .red }
         if 100 - u < 15 { return .orange }
-        return .blue
+        return store.runningColor
     }
 
     /// Same lettered badge the menu bar uses (C Claude · O Codex · G Gemini · X Grok).
@@ -153,14 +153,14 @@ struct PanelView: View {
         return Group {
             if let art = SyringeIcon.customIcon(for: id) {
                 Image(nsImage: art).resizable().renderingMode(.template).interpolation(.high)
-                    .foregroundStyle(locked ? Color.gray : Color.blue)
+                    .foregroundStyle(locked ? Color.gray : store.runningColor)
                     .frame(width: 15, height: 15)
             } else {
                 Text(SyringeIcon.letter(for: id))
                     .font(.system(size: 9, weight: .heavy))
                     .foregroundStyle(.white)
                     .frame(width: 15, height: 15)
-                    .background(Circle().fill(locked ? Color.gray : Color.blue))
+                    .background(Circle().fill(locked ? Color.gray : store.runningColor))
             }
         }
     }
@@ -177,6 +177,26 @@ struct PanelView: View {
                 }
                 .labelsHidden()
                 .frame(width: 80)
+            }
+            HStack {
+                Text(L.t("Menu bar colour", "메뉴바 색"))
+                Spacer()
+                if store.runColor == .custom {
+                    ColorPicker("", selection: $store.customRunColor, supportsOpacity: false)
+                        .labelsHidden()
+                }
+                Picker("", selection: $store.runColor) {
+                    ForEach(RunColor.allCases) { c in
+                        Label {
+                            Text(c.title)
+                        } icon: {
+                            Image(nsImage: swatch(c))
+                        }
+                        .tag(c)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 170)
             }
             Toggle(L.t("Keep Mac awake while waiting", "대기 중 Mac 잠자기 방지"),
                    isOn: Binding(get: { store.snapshot?.keepAwake ?? true }, set: { store.setKeepAwake($0) }))
@@ -195,6 +215,17 @@ struct PanelView: View {
         }
         .toggleStyle(.switch)
         .controlSize(.small)
+    }
+
+    /// Small colour dot for the picker menu.
+    private func swatch(_ c: RunColor) -> NSImage {
+        let img = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { r in
+            c.nsColor(dark: SyringeIcon.isDark).set()
+            NSBezierPath(ovalIn: r.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+        img.isTemplate = false
+        return img
     }
 
     private func fmtPct(_ v: Double) -> String {

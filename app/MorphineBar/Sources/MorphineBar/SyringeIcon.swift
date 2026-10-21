@@ -10,10 +10,8 @@ enum SyringeIcon {
     static var isDark: Bool {
         NSAppearance.currentDrawing().bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
-    static var running: NSColor {
-        isDark ? NSColor(srgbRed: 0.42, green: 0.74, blue: 1.0, alpha: 1)   // bright sky blue
-               : NSColor(srgbRed: 0.0, green: 0.40, blue: 0.92, alpha: 1)   // deep blue
-    }
+    /// Menu bar colour while agents run — chosen in the panel ("메뉴바 색").
+    static var running: NSColor { RunColor.current.nsColor(dark: isDark) }
     static var waiting: NSColor {
         isDark ? NSColor(white: 0.70, alpha: 1) : NSColor(white: 0.40, alpha: 1)
     }
