@@ -48,3 +48,6 @@ case ":$PATH:" in
   *) echo; echo "Add to ~/.zshrc:  export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
 echo; "$MORPHINE" status || true
+if ! command -v rtk >/dev/null; then
+  echo; echo "Tip: rtk compresses shell output for fewer tokens:  brew install rtk  then  morphine rtk setup"
+fi

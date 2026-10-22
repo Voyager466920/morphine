@@ -28,6 +28,7 @@ or the plugin copy: `ls ~/.claude/plugins/cache/*/morphine/*/bin/morphine`.
 | Only watch the 5-hour window | `morphine config set windows '["5h"]'` |
 | Change how often a sedated agent is re-checked | `morphine config set recheck_min 31` (minutes, default 31) |
 | Change when economy mode starts | `morphine config set economy.below_pct 40` (remaining %, default 50; `economy.enabled false` turns it off) |
+| Compress shell output with rtk | `brew install rtk`, then `morphine rtk setup`; check with `morphine rtk` |
 | End a lockout now | `morphine resume` |
 | Guard a CLI with no usage API | `morphine run --provider grok -- grok` |
 | Remove everything | `morphine uninstall` |

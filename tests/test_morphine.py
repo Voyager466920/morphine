@@ -400,6 +400,52 @@ class TestLockouts(Env):
         self.assertIn("next_check_at", data["waiting"][0])
 
 
+class TestRtk(Env):
+    def _fake_rtk(self):
+        b = self.home / "bin"
+        b.mkdir()
+        exe = b / "rtk"
+        exe.write_text("#!/bin/sh\n"
+                       "echo \"$@\" >> \"$(dirname \"$0\")/calls.txt\"\n"
+                       "if [ \"$1\" = gain ]; then echo '{\"summary\": {\"total_tokens_saved\": 123456}}'; fi\n")
+        exe.chmod(0o755)
+        return b
+
+    def test_status_detects_install_wiring_and_savings(self):
+        from morphine import rtk
+        b = self._fake_rtk()
+        cdir = Path(os.environ["CLAUDE_CONFIG_DIR"]); cdir.mkdir(parents=True)
+        (cdir / "settings.json").write_text('{"hooks": {"PreToolUse": [{"hooks": [{"command": "rtk-rewrite.sh"}]}]}}')
+        xdir = Path(os.environ["CODEX_HOME"]); xdir.mkdir(parents=True)
+        (xdir / "RTK.md").write_text("rtk")
+        (xdir / "AGENTS.md").write_text("@RTK.md\n")
+        with mock.patch.dict(os.environ, {"PATH": f"{b}:{os.environ['PATH']}"}):
+            st = rtk.status(refresh=True)
+        self.assertTrue(st["installed"])
+        self.assertTrue(st["claude"] and st["codex"])
+        self.assertEqual(st["saved_tokens"], 123456)
+        self.assertTrue(rtk.wired_for("codex"))
+
+    def test_setup_runs_rtk_init_for_each_agent(self):
+        from morphine import rtk
+        b = self._fake_rtk()
+        with mock.patch.dict(os.environ, {"PATH": f"{b}:{os.environ['PATH']}"}), redirect_stdout(io.StringIO()):
+            self.assertEqual(rtk.setup(["claude", "codex"]), 0)
+        calls = (b / "calls.txt").read_text().splitlines()
+        self.assertIn("init -g", calls)
+        self.assertIn("init -g --codex", calls)
+
+    def test_economy_note_mentions_rtk_only_when_wired(self):
+        from morphine import economy
+        from morphine.util import write_json_atomic
+        u = Usage("codex", [Window("5h", 80.0, time.time() + 3600)])
+        self.assertNotIn("rtk", economy.note_for_prompt("codex", "a", u, config.load()))
+        write_json_atomic(config.home() / "cache" / "rtk.json",
+                          {"installed": True, "codex": True, "claude": False, "checked_at": time.time()})
+        self.assertIn("rtk grep", economy.note_for_prompt("codex", "b", u, config.load()))
+        self.assertNotIn("rtk", economy.note_for_prompt("claude", "c", Usage("claude", u.windows), config.load()))
+
+
 class TestEconomy(Env):
     def _u(self, used):
         return Usage("claude", [Window("5h", used, time.time() + 3600), Window("7d", 10.0, time.time() + 9e5)])

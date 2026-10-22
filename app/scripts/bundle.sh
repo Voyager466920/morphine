@@ -53,6 +53,11 @@ if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "$HOME/.local/bin"
   ln -sf /Applications/Morphine.app/Contents/Resources/morphine/bin/morphine "$HOME/.local/bin/morphine"
   echo "✓ installed /Applications/Morphine.app"
-  echo "✓ CLI linked at ~/.local/bin/morphine (make sure ~/.local/bin is on your PATH)"
+  echo "✓ CLI linked at ~/.local/bin/morphine"
+  case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) echo "! ~/.local/bin is not on your PATH, so 'morphine' won't be found. Run:"
+       echo "    echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc" ;;
+  esac
   open /Applications/Morphine.app
 fi

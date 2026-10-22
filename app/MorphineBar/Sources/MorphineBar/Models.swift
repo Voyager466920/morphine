@@ -8,6 +8,7 @@ struct Snapshot: Decodable {
     var windows: [String]?
     var keepAwake: Bool?
     var economy: EconomySettings?
+    var rtk: RtkStatus?
     var providers: [Provider]
     var waiting: [Waiter]
 }
@@ -23,6 +24,14 @@ struct Provider: Decodable, Identifiable {
     var displayWindow: String?
     var economyOn: Bool?
     var windows: [UsageWindow]
+}
+
+struct RtkStatus: Decodable {
+    var installed: Bool
+    var claude: Bool?
+    var codex: Bool?
+    var savedTokens: Int?
+    var hint: String?
 }
 
 struct EconomySettings: Decodable {

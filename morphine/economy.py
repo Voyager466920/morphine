@@ -33,6 +33,12 @@ ON_TEXT = (
     "messages, numbers and technical details stay complete and exact, and reasoning, testing "
     "and verification are as thorough as usual."
 )
+RTK_TEXT = (
+    " rtk is installed and filters shell output, but its hook only sees shell commands: for "
+    "searches and for skimming large files or logs, `rtk grep`, `rtk find` and `rtk read` keep "
+    "that output compact too; the normal file-read tool is still used when exact file contents "
+    "are needed for an edit."
+)
 OFF_TEXT = (
     "Morphine economy mode is off: the {name} {window} usage window is back to {left}% left. "
     "The user's normal response style applies again."
@@ -89,6 +95,13 @@ def note_for_prompt(provider: str, session: Optional[str], usage: Usage, cfg: Di
     note = None
     if want and (not cur.get("on") or int(cur.get("since_note", 0)) + 1 >= s["reminder_every"]):
         note = ON_TEXT.format(**fmt)
+        try:
+            from morphine import rtk
+
+            if rtk.wired_for(provider):
+                note += RTK_TEXT
+        except Exception:  # noqa: BLE001
+            pass
         cur = {"on": True, "since_note": 0}
     elif want:
         cur = {"on": True, "since_note": int(cur.get("since_note", 0)) + 1}

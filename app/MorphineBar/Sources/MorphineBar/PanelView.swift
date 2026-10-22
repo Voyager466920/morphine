@@ -122,6 +122,7 @@ struct PanelView: View {
                          "아직 사용량이 없어요 — Claude Code나 Codex를 한 번 사용해 보세요."))
                     .font(.caption).foregroundStyle(.secondary)
             }
+            if let r = store.snapshot?.rtk { rtkRow(r) }
             if !store.hiddenProviders.isEmpty {
                 Text(L.t("Not connected: ", "연결 안 됨: ") + store.hiddenProviders.map(\.name).joined(separator: ", "))
                     .font(.caption2).foregroundStyle(.tertiary)
@@ -230,6 +231,33 @@ struct PanelView: View {
         }
         .toggleStyle(.switch)
         .controlSize(.small)
+    }
+
+    /// rtk (shell-output compression) status line.
+    private func rtkRow(_ r: RtkStatus) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                .font(.caption).foregroundStyle(r.installed ? store.runningColor : Color.gray)
+            Text(L.t("rtk output compression", "rtk 출력 압축")).font(.caption.weight(.medium))
+            Spacer()
+            Text(rtkDetail(r)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .help(L.t("Filters noisy shell output before the agent reads it. Set up with: morphine rtk setup",
+                  "에이전트가 읽기 전에 명령 출력의 군더더기를 걸러요. 설정: morphine rtk setup"))
+    }
+
+    private func rtkDetail(_ r: RtkStatus) -> String {
+        guard r.installed else { return L.t("not installed · brew install rtk", "미설치 · brew install rtk") }
+        var parts: [String] = []
+        parts.append("Claude \(r.claude == true ? "✓" : "–")")
+        parts.append("Codex \(r.codex == true ? "✓" : "–")")
+        if let s = r.savedTokens {
+            let n = Double(s)
+            let txt = n >= 1_000_000 ? String(format: "%.1fM", n / 1_000_000)
+                : n >= 1_000 ? String(format: "%.0fK", n / 1_000) : "\(s)"
+            parts.append(L.t("\(txt) saved", "\(txt) 절약"))
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// Small colour dot for the picker menu.

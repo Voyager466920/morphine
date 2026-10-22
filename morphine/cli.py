@@ -63,9 +63,19 @@ def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
         "windows": cfg.get("windows"),
         "keep_awake": cfg.get("keep_awake"),
         "economy": economy.settings(cfg),
+        "rtk": _rtk_status(cached_only),
         "providers": providers,
         "waiting": _waiting_entries(),
     }
+
+
+def _rtk_status(cached_only: bool) -> Optional[Dict[str, Any]]:
+    from morphine import rtk
+
+    try:
+        return rtk.cached_status() if cached_only else rtk.status()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _waiting_entries() -> List[Dict[str, Any]]:
@@ -270,6 +280,26 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rtk(args: argparse.Namespace) -> int:
+    from morphine import rtk
+
+    if args.action == "setup":
+        return rtk.setup(args.targets)
+    st = rtk.status(refresh=True)
+    if not st["installed"]:
+        print(f"rtk: not installed — {st.get('hint')}")
+        return 0
+    saved = st.get("saved_tokens")
+    print(f"rtk: {st['path']}")
+    print(f"  Claude Code: {'wired' if st['claude'] else 'not wired'}")
+    print(f"  Codex:       {'wired' if st['codex'] else 'not wired'}")
+    if saved is not None:
+        print(f"  tokens saved so far: {saved:,}")
+    if st.get("hint"):
+        print(f"  next: {st['hint']}")
+    return 0
+
+
 def cmd_resume(args: argparse.Namespace) -> int:
     from morphine import guard as g
 
@@ -334,6 +364,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("uninstall", help="remove Morphine hooks everywhere")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_uninstall)
+
+    s = sub.add_parser("rtk", help="rtk (shell-output compression) status / setup")
+    s.add_argument("action", nargs="?", choices=["status", "setup"], default="status")
+    s.add_argument("targets", nargs="*", help="claude codex (default: both if present)")
+    s.set_defaults(func=cmd_rtk)
 
     s = sub.add_parser("resume", help="end every lockout now")
     s.set_defaults(func=cmd_resume)

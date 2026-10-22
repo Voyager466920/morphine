@@ -53,8 +53,20 @@ cd morphine
 ```
 
 - **메뉴바 앱:** `/Applications/Morphine.app`에 설치되고 바로 실행돼요.
-- **CLI:** `morphine` 명령이 `~/.local/bin/morphine`에 생겨요. `command not found`가 나오면 `~/.zshrc`에 `export PATH="$HOME/.local/bin:$PATH"`를 추가하세요.
+- **CLI:** `morphine` 명령이 `~/.local/bin/morphine`에 생겨요.
 - **훅:** 이 Mac에서 찾은 도구(Claude Code, Codex, Gemini CLI, Grok)에 자동으로 연결돼요. 특정 도구만 연결하려면 `./install.sh claude codex`처럼 이름을 붙이세요.
+
+**`morphine: command not found`가 나오면** `~/.local/bin`이 터미널 PATH에 없어서 그래요. 아래 두 줄을 한 번만 실행하면 영구로 등록돼요.
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+```bash
+source ~/.zshrc
+```
+
+`export PATH=...`만 그 창에서 실행하면 터미널을 새로 열 때 다시 사라져요. 꼭 `~/.zshrc`에 추가하세요. Claude Code를 설치할 때 나오는 PATH 안내도 같은 폴더라서, 이걸로 같이 해결돼요.
 
 **업데이트:** 저장소 폴더에서 `git pull` 후 `app/scripts/bundle.sh --install`을 실행하세요.
 
@@ -168,6 +180,23 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 - **패널 표시:** 절약 모드가 켜진 도구 옆에 **절약 중**이 떠요.
 - **기준 바꾸기:** 패널의 **절약 모드 시작**에서 끄기 / 20~70% 중에 고르거나, 아래 명령어로 바꿀 수 있어요.
 
+### rtk 연동 (명령 출력 압축)
+
+에이전트 작업에서 토큰을 제일 많이 먹는 건 모델의 말투보다 **명령 실행 결과**(git, 테스트, 빌드 로그 등)예요. [rtk](https://github.com/rtk-ai/rtk)는 이런 출력에서 군더더기를 걸러서 에이전트에게 짧게 넘겨줘요. Morphine은 rtk를 설치하고, 상태를 보여주고, 절약 모드에서 더 잘 쓰이게 연결해요.
+
+```bash
+brew install rtk
+```
+
+```bash
+morphine rtk setup
+```
+
+- **설정:** `morphine rtk setup`은 rtk 자체 설치 명령(`rtk init -g`, `rtk init -g --codex`)을 Claude Code와 Codex에 실행해요. Claude Code는 한 번 다시 시작하세요.
+- **패널 표시:** 연결 상태(Claude ✓ · Codex ✓)와 지금까지 절약한 토큰 수가 나와요. 터미널에서는 `morphine rtk`로 확인해요.
+- **절약 모드에서:** rtk 훅은 셸 명령만 거르고, 에이전트의 기본 파일 읽기·검색 도구는 그대로 통과해요. 그래서 절약 모드 메모에 "검색과 큰 파일·로그 훑어보기는 `rtk grep` / `rtk find` / `rtk read`로" 하라는 문장이 추가돼요. 수정할 때 정확한 파일 내용이 필요하면 원래 읽기 도구를 그대로 써요.
+- **효과가 없는 경우:** 출력이 짧은 작업에서는 효과가 거의 없어요.
+
 ### 명령어
 
 | 하고 싶은 것 | 명령 |
@@ -181,6 +210,7 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 | 대기 중 잠자기 방지 끄기 | `morphine config set keep_awake false` |
 | 절약 모드 기준 바꾸기 (남은 %, 기본 50) | `morphine config set economy.below_pct 40` |
 | 절약 모드 끄기 | `morphine config set economy.enabled false` |
+| rtk 상태 / 설정 | `morphine rtk` / `morphine rtk setup` |
 | 대기 중인 에이전트 모두 깨우기 | `morphine resume` |
 | `codex` 경로 직접 지정 | `morphine config set providers.codex.path /path/to/codex` |
 | 도구 훅 연결 | `morphine install claude codex gemini grok` |
@@ -199,6 +229,20 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 - **알림은 두 번만 와요.** 대기가 시작될 때 한 번, 다시 차서 재개될 때 한 번이에요. 확인은 도구별로 31분마다 한 번씩만 해요.
 - **zsh에서 명령어 뒤 `# 설명`은 쓰지 마세요.** zsh 기본 설정에서는 주석으로 인식하지 않아서 오류가 나요.
 
+### 문제 해결
+
+| 증상 | 해결 |
+|---|---|
+| `morphine: command not found` | 위 [설치](#설치)의 PATH 등록 두 줄을 실행하세요 |
+| `bash: #: No such file or directory` | 명령어 뒤의 `# 설명`을 빼고 실행하세요 |
+| 메뉴바에 Claude가 안 보임 | Claude Code를 설치하고 `claude`로 한 번 로그인한 뒤, `morphine status --refresh`를 실행하고 키체인 창에서 **항상 허용**을 누르세요 |
+| Claude가 가끔 사라졌다 나타남 | 사용량 서버가 잠깐 막은 경우예요 (HTTP 429). Morphine이 마지막 값을 유지하고 잠시 쉬었다가 다시 읽어요 |
+| Codex에 `codex binary not found` | `morphine config set providers.codex.path "$(which codex)"` |
+| Codex `/hooks`에서 Installed가 0 | `morphine install codex`를 실행하고 `codex`를 다시 연 다음 신뢰 처리하세요 |
+| Codex가 멈추지 않고 계속 진행 | Codex는 오래 걸리는 훅을 끊어서, 기다리게 하는 대신 도구 호출을 거절해서 멈춰요. `/hooks`에서 Morphine 훅이 Active인지 확인하세요 |
+| 대기가 안 풀리는 것 같음 | 메뉴바의 **지금 바로 깨우기**나 `morphine resume`을 쓰세요. 상태는 `~/.morphine/state.json`, 기록은 `~/.morphine/log.txt`에 있어요 |
+| `morphine rtk`에서 not wired | `brew install rtk` 후 `morphine rtk setup`을 실행하고 Claude Code를 다시 시작하세요 |
+
 ---
 
 ## English
@@ -206,6 +250,8 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 **What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and holds it there. While it waits, Morphine re-reads usage every `recheck_min` minutes (default **31**, plus once at the reported reset time) and makes **no model calls**. As soon as the window has refilled, the hook returns and the agent carries on where it stopped.
 
 **Economy mode.** Below `economy.below_pct` left (default **50%**), the UserPromptSubmit hook adds a short note for Claude Code and Codex: terse prose, no recaps, only changed lines, targeted file reads, filtered command output — while code, commands, numbers, reasoning, testing and verification stay as complete and thorough as usual. The note is added on the switch and every 15 prompts, and a second note turns it off when the window refills.
+
+**rtk.** Morphine integrates [rtk](https://github.com/rtk-ai/rtk), which filters noisy shell output before the agent reads it: `morphine rtk setup` runs rtk's own `rtk init` for Claude Code and Codex, the panel shows wiring and tokens saved, and in economy mode the note also points searches and large-file skims at `rtk grep/find/read` (rtk's hook only sees shell commands).
 
 **Menu bar.** Each agent gets a syringe injecting into a badge (C Claude · O Codex · G Gemini · X Grok, or your own logo in `~/.morphine/icons/<agent>.png`). The number next to it is how much of its shortest window (5-hour, else daily, else weekly) is **left**: blue while it runs, gray with a countdown while it is locked out. Agents without usage data are hidden. Local readings refresh every 2 s, server readings every 60 s.
 
@@ -230,6 +276,8 @@ cd morphine
 - **Codex:** install the Codex CLI (`brew install --cask codex`), open `codex`, run `/hooks` and trust the two Morphine hooks.
 - **Grok / Gemini:** run them through the wrapper, e.g. `alias grok='morphine run --provider grok -- command grok'`.
 - **Claude Code plugin:** `/plugin marketplace add Voyager466920/morphine`, then `/plugin install morphine@morphine`, then `morphine install claude --no-hooks` for the status line feed.
+
+**`morphine: command not found`?** `~/.local/bin` isn't on your PATH. Add it permanently: `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc`, then `source ~/.zshrc`.
 
 **Commands:** `morphine status`, `morphine config set threshold_pct 5`, `morphine config set recheck_min 31`, `morphine resume`, `morphine uninstall`. Settings live in `~/.morphine/config.json`.
 
