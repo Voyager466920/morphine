@@ -49,6 +49,8 @@ def _load() -> Dict[str, Any]:
     if not isinstance(data, dict):
         data = {}
     data.setdefault("waiting", [])
+    data.setdefault("lockouts", {})
+    data.setdefault("snooze", {})
     return data
 
 
@@ -131,3 +133,64 @@ def log(line: str) -> None:
             f.write(f"{dt.datetime.now().isoformat(timespec='seconds')} {line}\n")
     except OSError:
         pass
+
+
+# ------------------------------------------------------------- lockouts
+#
+# One record per provider while its usage window is drained. Every hook call,
+# the menu bar's periodic `morphine status`, and blocked hooks all share it, so
+# usage is re-checked on ONE schedule (every `recheck_min`) and the person gets
+# ONE notification when the lockout starts and one when it ends.
+
+def get_lockout(provider: str) -> Optional[Dict[str, Any]]:
+    rec = _load()["lockouts"].get(provider)
+    return rec if isinstance(rec, dict) else None
+
+
+def all_lockouts() -> Dict[str, Dict[str, Any]]:
+    return dict(_load()["lockouts"])
+
+
+def start_lockout(provider: str, rec: Dict[str, Any]) -> bool:
+    """Create the lockout unless one already exists. True if this call created it."""
+    with _locked():
+        data = _load()
+        if provider in data["lockouts"]:
+            return False
+        data["lockouts"][provider] = rec
+        write_json_atomic(state_path(), data)
+    log(f"LOCKOUT {provider}: {rec.get('reason', '')}; refill ~{fmt_clock(rec.get('resume_at', now()))}")
+    return True
+
+
+def update_lockout(provider: str, **fields: Any) -> None:
+    with _locked():
+        data = _load()
+        if provider in data["lockouts"]:
+            data["lockouts"][provider].update(fields)
+            write_json_atomic(state_path(), data)
+
+
+def clear_lockout(provider: str, outcome: str = "resumed") -> Optional[Dict[str, Any]]:
+    """Remove the lockout. Returns the record only to the caller that removed it."""
+    with _locked():
+        data = _load()
+        rec = data["lockouts"].pop(provider, None)
+        if rec is not None:
+            write_json_atomic(state_path(), data)
+    if rec is not None:
+        log(f"{outcome.upper()} {provider}")
+    return rec
+
+
+def snooze(provider: str, until: float) -> None:
+    """Don't lock this provider out again before `until` (used by "Wake now")."""
+    with _locked():
+        data = _load()
+        data["snooze"][provider] = until
+        write_json_atomic(state_path(), data)
+
+
+def snoozed(provider: str, at: Optional[float] = None) -> bool:
+    at = now() if at is None else at
+    return float(_load()["snooze"].get(provider, 0)) > at

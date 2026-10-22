@@ -27,6 +27,7 @@ or the plugin copy: `ls ~/.claude/plugins/cache/*/morphine/*/bin/morphine`.
 | Change the trigger | `morphine config set threshold_pct 3` (remaining %, default 5) |
 | Only watch the 5-hour window | `morphine config set windows '["5h"]'` |
 | Change how often a sedated agent is re-checked | `morphine config set recheck_min 31` (minutes, default 31) |
+| Change when economy mode starts | `morphine config set economy.below_pct 40` (remaining %, default 50; `economy.enabled false` turns it off) |
 | End a lockout now | `morphine resume` |
 | Guard a CLI with no usage API | `morphine run --provider grok -- grok` |
 | Remove everything | `morphine uninstall` |
@@ -36,9 +37,17 @@ Settings live in `~/.morphine/config.json`; the lockout log is `~/.morphine/log.
 ## What each agent supports
 
 - **Claude Code** — pauses before the limit. Usage comes from the status line (`morphine install claude` adds it) or, with only a Claude Code login, from the Anthropic usage endpoint via the Keychain item "Claude Code-credentials".
-- **Codex** — pauses before the limit. After installing, the user must open the Codex CLI (`brew install --cask codex`; the VS Code extension's bundled binary can't do this), run `/hooks`, and trust the two Morphine hooks once.
+- **Codex** — pauses before the limit by denying tool calls and prompts (Codex kills hooks that run longer than ~30 s, so it can't be held by a sleeping hook). If a tool call is denied with "Morphine paused …", stop and end the turn with a one-line status. Auto-resume works under `morphine run --provider codex -- codex`; in the app, the user sends "continue" after the refill notification. After installing, the user must open the Codex CLI (`brew install --cask codex`; the VS Code extension's bundled binary can't do this), run `/hooks`, and trust the two Morphine hooks once.
 - **Gemini CLI** — usage is only an estimate, so it does not pause by default; use the wrapper, or `morphine config set providers.gemini.lockout_on_estimate true`.
 - **Grok Build** — no usage data; use the wrapper (`alias grok='morphine run --provider grok -- command grok'`).
+
+## Economy mode
+
+Below `economy.below_pct` left, Morphine's UserPromptSubmit hook adds a short note
+asking for token-lean replies (terse prose, only changed lines, targeted reads,
+filtered output) while code, accuracy, reasoning and verification stay as thorough as
+usual. If you see "Morphine economy mode is on" in context, follow it; "off" restores
+the normal style.
 
 ## Troubleshooting
 

@@ -44,7 +44,9 @@ DEFAULTS: Dict[str, Any] = {
     "providers": {
         # Claude's usage endpoint rate-limits (HTTP 429), so read it at most every 3 min.
         "claude": {"enabled": True, "min_interval_sec": 180},
-        "codex": {"enabled": True},
+        # Codex kills long-running hooks (~30 s), so it is paused by refusing tool
+        # calls and prompts ("deny") instead of a sleeping hook ("block").
+        "codex": {"enabled": True, "pause_mode": "deny"},
         "gemini": {
             "enabled": True,
             # Gemini CLI exposes no quota endpoint; usage is estimated from
@@ -56,6 +58,10 @@ DEFAULTS: Dict[str, Any] = {
         },
         "grok": {"enabled": True},
     },
+    # Economy mode: below this share of the (shortest) window left, the
+    # UserPromptSubmit hook asks Claude Code / Codex for token-lean replies
+    # (terse prose, no recaps/file dumps) without lowering quality.
+    "economy": {"enabled": True, "below_pct": 50, "reminder_every": 15},
     # PTY wrapper (`morphine run`) for CLIs that expose no usage data.
     "wrapper": {
         "resume_text": "continue",

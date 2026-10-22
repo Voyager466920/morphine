@@ -341,6 +341,100 @@ class TestDisplayRule(Env):
         self.assertEqual(codex["display_window"], "5h")
 
 
+class TestLockouts(Env):
+    def _drain(self, provider="codex", used=99.0, reset_in=3600):
+        from morphine.util import write_json_atomic
+        u = Usage(provider, [Window("5h", used, time.time() + reset_in)], source="test")
+        write_json_atomic(config.home() / "cache" / f"{provider}.json", dict(u.to_dict(), checked_at=time.time()))
+
+    def _hook(self, provider, event):
+        env = dict(os.environ, PYTHONPATH=str(ROOT))
+        return subprocess.run([sys.executable, "-m", "morphine", "hook", provider],
+                              input=json.dumps({"hook_event_name": event, "session_id": "s"}),
+                              capture_output=True, text=True, env=env, timeout=20)
+
+    def test_codex_is_denied_not_blocked_and_locks_once(self):
+        self._drain()
+        t = time.time()
+        r1 = self._hook("codex", "PreToolUse")
+        r2 = self._hook("codex", "PreToolUse")
+        r3 = self._hook("codex", "UserPromptSubmit")
+        self.assertLess(time.time() - t, 15)  # returned promptly, no sleeping
+        d1 = json.loads(r1.stdout)["hookSpecificOutput"]
+        self.assertEqual(d1["permissionDecision"], "deny")
+        self.assertIn("end this turn", d1["permissionDecisionReason"])
+        self.assertEqual(json.loads(r2.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(json.loads(r3.stdout)["decision"], "block")
+        log = (config.home() / "log.txt").read_text()
+        self.assertEqual(log.count("LOCKOUT codex"), 1)   # one lockout, one notification
+        self.assertIsNotNone(state.get_lockout("codex"))
+
+    def test_tick_clears_when_refilled_and_notifies_once(self):
+        cfg = dict(config.load(), notify=True)
+        self._drain()
+        sent = []
+        with mock.patch("morphine.guard.notify", side_effect=lambda *a, **k: sent.append(a[0])):
+            rec = guard.acquire("codex", cfg)
+            self.assertIsNotNone(rec)
+            self.assertIsNotNone(guard.acquire("codex", cfg))  # joined, not restarted
+            state.update_lockout("codex", next_check_at=time.time() - 1)
+            with mock.patch("morphine.guard.get_usage", return_value=Usage("codex", [Window("5h", 2.0, None)])):
+                self.assertIsNone(guard.tick("codex", cfg))
+                self.assertIsNone(guard.tick("codex", cfg))
+        self.assertEqual(len(sent), 2)                         # one "paused", one "back"
+        self.assertIsNone(state.get_lockout("codex"))
+
+    def test_wake_now_snoozes_until_refill(self):
+        cfg = config.load()
+        self._drain()
+        self.assertIsNotNone(guard.acquire("codex", cfg))
+        self.assertEqual(guard.wake_all(), 1)
+        self.assertIsNone(guard.acquire("codex", cfg))         # still drained, but snoozed
+
+    def test_status_lists_lockouts_as_waiting(self):
+        from morphine import cli
+        self._drain()
+        guard.acquire("codex", config.load())
+        data = cli.collect(config.load(), cached_only=True)
+        self.assertEqual([w["provider"] for w in data["waiting"]], ["codex"])
+        self.assertIn("next_check_at", data["waiting"][0])
+
+
+class TestEconomy(Env):
+    def _u(self, used):
+        return Usage("claude", [Window("5h", used, time.time() + 3600), Window("7d", 10.0, time.time() + 9e5)])
+
+    def test_switches_on_below_threshold_then_off_with_reminders(self):
+        from morphine import economy
+        cfg = config.load()  # below_pct 50, reminder_every 15
+        self.assertIsNone(economy.note_for_prompt("claude", "s1", self._u(40.0), cfg))   # 60% left
+        on = economy.note_for_prompt("claude", "s1", self._u(55.0), cfg)                 # 45% left
+        self.assertIn("economy mode is on", on)
+        self.assertIn("45% left", on)
+        self.assertIn("as thorough as usual", on)
+        quiet = [economy.note_for_prompt("claude", "s1", self._u(56.0), cfg) for _ in range(14)]
+        self.assertTrue(all(q is None for q in quiet))
+        self.assertIn("is on", economy.note_for_prompt("claude", "s1", self._u(57.0), cfg))  # 15th prompt reminder
+        off = economy.note_for_prompt("claude", "s1", self._u(3.0), cfg)                # window refilled
+        self.assertIn("economy mode is off", off)
+        self.assertIsNone(economy.note_for_prompt("claude", "s1", self._u(3.0), cfg))
+
+    def test_uses_the_displayed_5h_window_and_threshold_is_configurable(self):
+        from morphine import economy
+        config.set_value("economy.below_pct", "30")
+        cfg = config.load()
+        self.assertIsNone(economy.note_for_prompt("claude", "a", self._u(60.0), cfg))  # 40% left > 30
+        self.assertIsNotNone(economy.note_for_prompt("claude", "a", self._u(75.0), cfg))
+        config.set_value("economy.enabled", "false")
+        self.assertIsNone(economy.note_for_prompt("claude", "b", self._u(99.0), config.load()))
+
+    def test_unsupported_or_unknown_usage_adds_nothing(self):
+        from morphine import economy
+        cfg = config.load()
+        self.assertIsNone(economy.note_for_prompt("grok", "s", self._u(90.0), cfg))
+        self.assertIsNone(economy.note_for_prompt("claude", "s", Usage("claude", error="x"), cfg))
+
+
 class TestHookCLI(Env):
     def _run(self, args, stdin="", extra_env=None):
         env = dict(os.environ, PYTHONPATH=str(ROOT), **(extra_env or {}))
@@ -360,6 +454,16 @@ class TestHookCLI(Env):
         r = self._run(["hook", "claude"], '{"hookEventName":"PreToolUse"}', {"GROK_HOOK_EVENT": "PreToolUse"})
         self.assertLess(time.time() - t, 5)
         self.assertEqual(r.returncode, 0)
+
+    def test_prompt_hook_injects_economy_context(self):
+        sl = {"rate_limits": {"five_hour": {"used_percentage": 70, "resets_at": time.time() + 3600}}}
+        self._run(["statusline"], json.dumps(sl))
+        r = self._run(["hook", "claude"], json.dumps({"hook_event_name": "UserPromptSubmit", "session_id": "x"}))
+        out = json.loads(r.stdout)
+        self.assertEqual(out["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
+        self.assertIn("economy mode is on", out["hookSpecificOutput"]["additionalContext"])
+        r = self._run(["hook", "claude"], json.dumps({"hook_event_name": "PreToolUse", "session_id": "x"}))
+        self.assertEqual(r.stdout, "")
 
     def test_statusline_wrap_and_cache(self):
         sl = {"rate_limits": {"five_hour": {"used_percentage": 42, "resets_at": time.time() + 3600}}}

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from morphine import __version__, config, state
 from morphine.adapters import ADAPTERS, Usage, cached_usage, enabled_providers, get_usage
 from morphine.adapters.base import shortest_window
+from morphine import economy
 from morphine.adapters.claude import statusline_cache_path, usage_from_rate_limits
 from morphine.util import fmt_clock, fmt_duration, now, read_json, write_json_atomic
 
@@ -22,6 +23,10 @@ ALLOW_OUTPUT = {"claude": "", "codex": "", "grok": "", "gemini": "{}"}
 # ------------------------------------------------------------------ status
 
 def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
+    from morphine import guard as g
+
+    if not cached_only:
+        g.tick_all(cfg)  # the menu bar's periodic refresh drives the recheck schedule
     t = now()
     providers = []
     for pid in enabled_providers(cfg):
@@ -49,6 +54,7 @@ def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
             w["remaining"] = win.remaining(t)
         disp = shortest_window(u.windows, t)
         d["display_window"] = disp.name if disp else None
+        d["economy_on"] = economy.is_on(u, cfg) and pid in economy.SUPPORTED
         providers.append(d)
     return {
         "version": __version__,
@@ -56,9 +62,22 @@ def collect(cfg: Dict[str, Any], cached_only: bool) -> Dict[str, Any]:
         "threshold_pct": cfg.get("threshold_pct"),
         "windows": cfg.get("windows"),
         "keep_awake": cfg.get("keep_awake"),
+        "economy": economy.settings(cfg),
         "providers": providers,
-        "waiting": state.waiting(),
+        "waiting": _waiting_entries(),
     }
+
+
+def _waiting_entries() -> List[Dict[str, Any]]:
+    """Lockouts (one per provider) plus any wrapper sessions waiting on their own."""
+    out = []
+    for p, rec in state.all_lockouts().items():
+        out.append({"id": p, "provider": p, "started_at": rec.get("started_at", now()),
+                    "resume_at": rec.get("resume_at", now()), "next_check_at": rec.get("next_check_at"),
+                    "reason": rec.get("reason"), "cwd": rec.get("cwd"), "window": rec.get("window")})
+    locked = {e["provider"] for e in out}
+    out += [w for w in state.waiting() if w.get("provider") not in locked]
+    return out
 
 
 def _bar(pct: Optional[float], width: int = 12) -> str:
@@ -122,14 +141,33 @@ def cmd_hook(args: argparse.Namespace) -> int:
         cfg = config.load()
         if provider in ADAPTERS and ADAPTERS[provider].supports_preemptive \
                 and config.provider_cfg(cfg, provider).get("enabled", True):
-            from morphine.guard import guard
+            from morphine import guard as g
 
             meta = {
                 "session": payload.get("session_id") or payload.get("sessionId"),
                 "cwd": payload.get("cwd") or os.getcwd(),
                 "event": event or None,
             }
-            guard(provider, cfg, meta)
+            rec = g.acquire(provider, cfg, meta)
+            if rec is not None and g.pause_mode(provider, cfg) == "deny":
+                # Refuse instead of sleeping: the agent stops on its own.
+                if event == "PreToolUse":
+                    print(json.dumps({"hookSpecificOutput": {
+                        "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                        "permissionDecisionReason": g.deny_reason(provider, rec, cfg, for_model=True)}}))
+                elif event == "UserPromptSubmit":
+                    print(json.dumps({"decision": "block",
+                                      "reason": g.deny_reason(provider, rec, cfg, for_model=False)}))
+                elif allow:
+                    print(allow)
+                return 0
+            if rec is not None:
+                g.wait_for_clear(provider, cfg, meta)
+            # Economy mode: on prompt submit, maybe add a "be token-lean" note.
+            if event == "UserPromptSubmit":
+                note = economy.note_for_prompt(provider, meta["session"], get_usage(provider, cfg), cfg)
+                if note:
+                    allow = economy.hook_output(event, note)
     except Exception as e:  # noqa: BLE001 - never break the agent
         state.log(f"hook error ({provider}): {e!r}")
     if allow:
@@ -160,9 +198,9 @@ def cmd_statusline(args: argparse.Namespace) -> int:
                 parts.append(f"{w.name} {max(0.0, 100 - w.effective_used()):.0f}% left")
             if parts:
                 ours = "💉 " + " · ".join(parts)
-    locked = [w for w in state.waiting() if w.get("provider") == "claude"]
-    if locked:
-        ours = f"⏸ Morphine {fmt_duration(locked[0]['resume_at'] - now())}"
+    lock = state.get_lockout("claude")
+    if lock:
+        ours = f"⏸ Morphine {fmt_duration(float(lock.get('resume_at', now())) - now())}"
     theirs = ""
     if args.wrap:
         try:
@@ -233,8 +271,10 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
+    from morphine import guard as g
+
+    n = g.wake_all() or len(state.waiting())
     state.request_resume_now()
-    n = len(state.waiting())
     print(f"resume requested ({n} agent{'s' if n != 1 else ''} waiting)")
     return 0
 

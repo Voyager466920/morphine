@@ -21,6 +21,7 @@
 - **바닥나기 전에 멈춤:** 에이전트가 일하는 도중 5시간 한도나 주간 한도의 남은 양이 **5% 아래**로 떨어지면 (기준은 바꿀 수 있어요), 다음 도구 호출 직전에 그 자리에서 멈춰요.
 - **대기 중 토큰 0:** 멈춘 동안 모델을 한 번도 부르지 않아요. 훅 프로세스가 기다리면서 사용량만 확인해요.
 - **31분마다 확인 → 차면 자동 재개:** 멈춘 동안 31분마다 남은 양을 다시 확인해요. 리셋 시각을 알면 그 시각에도 한 번 더 확인하고, 다시 차 있으면 멈췄던 작업을 그대로 이어서 해요.
+- **절약 모드:** 남은 양이 **50% 아래**로 내려가면 (기준은 바꿀 수 있어요) Claude Code·Codex에 "토큰을 아껴서 일해 달라"는 메모를 자동으로 넣어요. 다시 차면 메모로 해제해요.
 - **메뉴바 표시:** 도구마다 남은 양을 보여줘요. 작동 중엔 **파란색**, 대기 중엔 **회색**이에요.
 
 이름은 병원의 **모르핀 PCA 펌프**에서 왔어요. 버튼을 누르면 한 번 투여되고, 그다음엔 **잠금 시간(lockout)** 동안 아무리 눌러도 안 나와요.
@@ -32,7 +33,7 @@
 | 도구 | 남은 양 읽는 곳 | 자동 멈춤 |
 |---|---|---|
 | **Claude Code** | Claude Code status line → Anthropic 사용량 서버 | ✅ 5시간·주간 (Claude Code 세션) |
-| **Codex** | `codex app-server` → Codex 대화 기록 | ✅ 5시간·주간 (CLI 확인됨, 앱·VS Code 확장은 미확인) |
+| **Codex** | `codex app-server` → Codex 대화 기록 | ✅ 5시간·주간 (도구 호출·새 프롬프트를 거절해서 멈춤, 아래 설명) |
 | **Gemini CLI** | 대화 기록으로 하루 요청 수 **추정** | ⚠️ 추정치라 기본은 표시만 |
 | **Grok Build** | 공개된 사용량 정보 없음 | ❌ 한도에 걸린 뒤 감지 → 31분마다 재시도 |
 
@@ -92,6 +93,11 @@ codex
 1. Codex 안에서 `/hooks`를 입력하고 Morphine 훅 두 개를 신뢰 처리하세요.
 2. 이걸 안 하면 Codex는 사용량 표시만 되고 멈추지 않아요.
 
+**Codex는 멈추는 방식이 달라요.** Codex(앱·VS Code·CLI)는 30초 넘게 걸리는 훅을 끊고 그냥 진행해 버려서, Claude처럼 훅에서 기다리게 할 수가 없어요. 그래서 남은 양이 기준 아래로 떨어지면 Morphine이 **도구 호출을 거절**하고 "여기서 멈추고 턴을 끝내라"고 알려줘요. 새 프롬프트도 대기 중엔 거절돼요.
+
+- **재개:** 31분마다 확인해서 다시 차면 알림이 와요. 앱·VS Code에서는 그때 "계속"이라고 보내면 이어서 해요.
+- **완전 자동 재개 (CLI):** `~/.zshrc`에 `alias codex='morphine run --provider codex -- command codex'`를 추가하고 CLI로 쓰면, 다시 찼을 때 Morphine이 `continue`를 대신 입력해요.
+
 Homebrew가 없으면 `npm install -g @openai/codex`로 설치하세요 (Node 22 이상 필요).
 
 **Grok Build · Gemini CLI**
@@ -139,6 +145,29 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 3. **먼저** `morphine config set threshold_pct 5`로 되돌리세요.
 4. 그다음 **지금 바로 깨우기**를 누르면 이어서 진행돼요.
 
+### 절약 모드
+
+남은 양(메뉴바에 보이는 숫자)이 기준 아래로 내려가면, Morphine이 다음 프롬프트에 짧은 메모를 붙여서 에이전트가 토큰을 아끼게 해요. Claude Code와 Codex에서 동작해요.
+
+**줄이는 것:**
+
+- 인사말, 앞뒤 요약, 군더더기 문장 → 짧고 담백한 문장으로
+- 파일 전체를 다시 보여주기 → 바뀐 부분만
+- 같은 파일 다시 읽기, 긴 명령 출력 그대로 붙이기 → 필요한 범위만 읽고, 걸러서 보기
+- 따로따로 하는 도구 호출 → 묶어서 한 번에
+
+**줄이지 않는 것 (성능 유지):**
+
+- 코드, 명령어, 오류 메시지, 숫자는 생략 없이 정확하게
+- 생각(추론), 테스트, 검증은 평소만큼 꼼꼼하게
+
+**알아둘 점:**
+
+- **메모를 붙이는 시점:** 켜질 때 한 번, 그 뒤로는 15번 프롬프트마다 한 번만 다시 붙여요. 매번 붙이지 않아서 메모 자체에 드는 토큰은 아주 적어요.
+- **꺼지는 시점:** 한도가 다시 차서 기준 위로 올라가면 "절약 모드 해제" 메모로 원래대로 돌아가요.
+- **패널 표시:** 절약 모드가 켜진 도구 옆에 **절약 중**이 떠요.
+- **기준 바꾸기:** 패널의 **절약 모드 시작**에서 끄기 / 20~70% 중에 고르거나, 아래 명령어로 바꿀 수 있어요.
+
 ### 명령어
 
 | 하고 싶은 것 | 명령 |
@@ -150,6 +179,8 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 | 리셋 시각 추가 확인 끄기 (31분 간격만) | `morphine config set recheck_at_reset false` |
 | 5시간 한도만 보고 멈추기 | `morphine config set windows '["5h"]'` |
 | 대기 중 잠자기 방지 끄기 | `morphine config set keep_awake false` |
+| 절약 모드 기준 바꾸기 (남은 %, 기본 50) | `morphine config set economy.below_pct 40` |
+| 절약 모드 끄기 | `morphine config set economy.enabled false` |
 | 대기 중인 에이전트 모두 깨우기 | `morphine resume` |
 | `codex` 경로 직접 지정 | `morphine config set providers.codex.path /path/to/codex` |
 | 도구 훅 연결 | `morphine install claude codex gemini grok` |
@@ -165,6 +196,7 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 - **Mac 잠자기는 Morphine이 막아줘요.** 대기 중에는 `caffeinate -i`로 잠자기를 막아요. 다만 MacBook 덮개를 닫으면 잠들 수 있어요.
 - **재개 직후 첫 호출은 조금 비싸요.** 오래 쉬면 프롬프트 캐시가 만료돼서, 재개 후 첫 호출에서 캐시를 다시 만들어요.
 - **비공식 경로는 깨질 수 있어요.** Codex app-server와 Anthropic 사용량 서버 조회는 공식 문서에 없는 방법이에요. 업데이트로 바뀌면 그 도구만 "알 수 없음"이 되고, 에이전트를 막지는 않아요.
+- **알림은 두 번만 와요.** 대기가 시작될 때 한 번, 다시 차서 재개될 때 한 번이에요. 확인은 도구별로 31분마다 한 번씩만 해요.
 - **zsh에서 명령어 뒤 `# 설명`은 쓰지 마세요.** zsh 기본 설정에서는 주석으로 인식하지 않아서 오류가 나요.
 
 ---
@@ -173,12 +205,14 @@ Morphine은 다른 회사의 로고를 포함하지 않아요. 직접 구한 이
 
 **What it does.** Morphine watches each agent's usage windows. When less than `threshold_pct` (default **5%**) of a 5-hour, weekly or daily window remains, the agent's own hook blocks right before the next tool call or prompt and holds it there. While it waits, Morphine re-reads usage every `recheck_min` minutes (default **31**, plus once at the reported reset time) and makes **no model calls**. As soon as the window has refilled, the hook returns and the agent carries on where it stopped.
 
+**Economy mode.** Below `economy.below_pct` left (default **50%**), the UserPromptSubmit hook adds a short note for Claude Code and Codex: terse prose, no recaps, only changed lines, targeted file reads, filtered command output — while code, commands, numbers, reasoning, testing and verification stay as complete and thorough as usual. The note is added on the switch and every 15 prompts, and a second note turns it off when the window refills.
+
 **Menu bar.** Each agent gets a syringe injecting into a badge (C Claude · O Codex · G Gemini · X Grok, or your own logo in `~/.morphine/icons/<agent>.png`). The number next to it is how much of its shortest window (5-hour, else daily, else weekly) is **left**: blue while it runs, gray with a countdown while it is locked out. Agents without usage data are hidden. Local readings refresh every 2 s, server readings every 60 s.
 
 | Agent | Usage source | Auto-pause |
 |---|---|---|
 | Claude Code | status line `rate_limits` → Anthropic OAuth usage endpoint | ✅ 5h & weekly (Claude Code sessions) |
-| Codex | `codex app-server` `account/rateLimits/read` → session logs | ✅ 5h & weekly (CLI; desktop app / IDE extension unverified) |
+| Codex | `codex app-server` `account/rateLimits/read` → session logs | ✅ 5h & weekly — Codex kills hooks after ~30 s, so Morphine *denies* tool calls/prompts instead of sleeping; the agent ends its turn and is resumed on refill (automatically under `morphine run -- codex`) |
 | Gemini CLI | estimated from session files | ⚠️ estimate, display-only by default |
 | Grok Build | none published | ❌ PTY wrapper reacts to the limit message, retries every 31 min |
 

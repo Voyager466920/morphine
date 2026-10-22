@@ -92,6 +92,11 @@ struct PanelView: View {
                     HStack(spacing: 6) {
                         badge(p.id)
                         Text(p.name).font(.callout.weight(.medium))
+                        if p.economyOn == true {
+                            Text(L.t("saving", "절약 중")).font(.caption2)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(Capsule().fill(Color.green.opacity(0.2)))
+                        }
                         if p.preemptive == false {
                             Text(L.t("wrapper", "래퍼")).font(.caption2)
                                 .padding(.horizontal, 4).background(Capsule().stroke(.secondary))
@@ -174,6 +179,16 @@ struct PanelView: View {
                 Spacer()
                 Picker("", selection: Binding(get: { store.threshold }, set: { store.setThreshold($0) })) {
                     ForEach([1.0, 2.0, 3.0, 5.0, 10.0], id: \.self) { Text(fmtPct($0)).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 80)
+            }
+            HStack {
+                Text(L.t("Economy mode below", "절약 모드 시작 (남은 양)"))
+                Spacer()
+                Picker("", selection: Binding(get: { store.economyBelow }, set: { store.setEconomy($0) })) {
+                    Text(L.t("Off", "끄기")).tag(0.0)
+                    ForEach([20.0, 30.0, 40.0, 50.0, 60.0, 70.0], id: \.self) { Text(fmtPct($0)).tag($0) }
                 }
                 .labelsHidden()
                 .frame(width: 80)

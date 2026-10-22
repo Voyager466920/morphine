@@ -7,6 +7,7 @@ struct Snapshot: Decodable {
     var thresholdPct: Double?
     var windows: [String]?
     var keepAwake: Bool?
+    var economy: EconomySettings?
     var providers: [Provider]
     var waiting: [Waiter]
 }
@@ -20,7 +21,14 @@ struct Provider: Decodable, Identifiable {
     var source: String?
     var preemptive: Bool?
     var displayWindow: String?
+    var economyOn: Bool?
     var windows: [UsageWindow]
+}
+
+struct EconomySettings: Decodable {
+    var enabled: Bool
+    var belowPct: Double
+    var reminderEvery: Int?
 }
 
 struct UsageWindow: Decodable, Identifiable {

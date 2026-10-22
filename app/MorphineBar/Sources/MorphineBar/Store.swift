@@ -159,6 +159,24 @@ final class Store: ObservableObject {
         Task { _ = await run(["config", "set", "threshold_pct", String(pct)]); refresh(network: false) }
     }
 
+    /// 0 = economy mode off; otherwise the remaining-% below which it switches on.
+    var economyBelow: Double {
+        guard let e = snapshot?.economy, e.enabled else { return 0 }
+        return e.belowPct
+    }
+
+    func setEconomy(_ below: Double) {
+        Task {
+            if below <= 0 {
+                _ = await run(["config", "set", "economy.enabled", "false"])
+            } else {
+                _ = await run(["config", "set", "economy.enabled", "true"])
+                _ = await run(["config", "set", "economy.below_pct", String(below)])
+            }
+            refresh(network: false)
+        }
+    }
+
     func setKeepAwake(_ on: Bool) {
         Task { _ = await run(["config", "set", "keep_awake", on ? "true" : "false"]); refresh(network: false) }
     }

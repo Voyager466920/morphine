@@ -141,6 +141,10 @@ def run(cmd: List[str], provider: str, cfg: Dict[str, Any]) -> int:
 
     pending: Optional[Tuple[float, str, float, Any]] = None  # (resume_at, waiter_id, started, caffeinate)
     quiet_until = 0.0
+    # Hook-driven lockouts (e.g. Codex in "deny" mode stops itself): when the
+    # provider's lockout ends, type the resume text so the session carries on.
+    lock_seen = False
+    next_tick = 0.0
     stdin_open = True
     try:
         while True:
@@ -180,6 +184,22 @@ def run(cmd: List[str], provider: str, cfg: Dict[str, Any]) -> int:
                     stdin_open = False
                 else:
                     os.write(fd, data)
+            if pending is None and now() >= next_tick:
+                next_tick = now() + 15
+                try:
+                    from morphine import guard as g
+
+                    rec = g.tick(provider, cfg)
+                except Exception:  # noqa: BLE001
+                    rec = state.get_lockout(provider)
+                if rec is not None:
+                    lock_seen = True
+                elif lock_seen:
+                    lock_seen = False
+                    if resume_text:
+                        os.write(fd, resume_text.encode() + b"\r")
+                    detector.reset()
+                    quiet_until = now() + 90
             if pending is not None:
                 resume_at, wid, started, caff = pending
                 early = state.resume_requested_since(started)
