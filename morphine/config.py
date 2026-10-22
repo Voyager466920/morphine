@@ -42,7 +42,8 @@ DEFAULTS: Dict[str, Any] = {
     # comes before the next periodic check.
     "recheck_at_reset": True,
     "providers": {
-        "claude": {"enabled": True},
+        # Claude's usage endpoint rate-limits (HTTP 429), so read it at most every 3 min.
+        "claude": {"enabled": True, "min_interval_sec": 180},
         "codex": {"enabled": True},
         "gemini": {
             "enabled": True,

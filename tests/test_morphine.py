@@ -264,13 +264,49 @@ class TestAdapters(Env):
         class A:
             def fetch(self, cfg):
                 calls.append(1)
+                return Usage("codex", [Window("5h", 1, None)])
+
+        with mock.patch.dict("morphine.adapters.ADAPTERS", {"codex": A()}):
+            get_usage("codex", cfg)
+            get_usage("codex", cfg)
+            get_usage("codex", cfg, max_age=0)
+        self.assertEqual(len(calls), 2)
+
+    def test_failed_read_keeps_last_good_and_backs_off_on_429(self):
+        cfg = dict(config.load(), cache_ttl_sec=0)
+        cfg["providers"] = dict(cfg["providers"], claude={"enabled": True, "min_interval_sec": 0})
+        results = [Usage("claude", [Window("5h", 40.0, time.time() + 3600)], source="oauth"),
+                   Usage("claude", source="oauth", error="oauth usage request failed: HTTP Error 429: Too Many Requests")]
+        calls = []
+
+        class A:
+            def fetch(self, cfg):
+                calls.append(1)
+                return results[min(len(calls), len(results)) - 1]
+
+        with mock.patch.dict("morphine.adapters.ADAPTERS", {"claude": A()}):
+            self.assertTrue(get_usage("claude", cfg).ok)
+            second = get_usage("claude", cfg)
+            self.assertTrue(second.ok)                      # still shows the 40% reading
+            self.assertEqual(second.windows[0].used_pct, 40.0)
+            self.assertIn("last good reading", second.note)
+            third = get_usage("claude", cfg, max_age=0)     # inside the 2-minute backoff
+            self.assertEqual(len(calls), 2)                 # ...so no third network call
+            self.assertTrue(third.ok)
+
+    def test_min_interval_limits_network_reads(self):
+        cfg = config.load()  # claude: min_interval_sec 180
+        calls = []
+
+        class A:
+            def fetch(self, cfg):
+                calls.append(1)
                 return Usage("claude", [Window("5h", 1, None)])
 
         with mock.patch.dict("morphine.adapters.ADAPTERS", {"claude": A()}):
-            get_usage("claude", cfg)
-            get_usage("claude", cfg)
             get_usage("claude", cfg, max_age=0)
-        self.assertEqual(len(calls), 2)
+            get_usage("claude", cfg, max_age=0)
+        self.assertEqual(len(calls), 1)
 
     def test_adapter_crash_never_raises(self):
         class Boom:
